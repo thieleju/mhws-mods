@@ -2,27 +2,41 @@ const fs = require("fs");
 const path = require("path");
 const archiver = require("archiver");
 
-const version = process.env.VERSION;
 const modName = process.env.MOD_NAME;
+if (!modName) {
+  console.error("Error: MOD_NAME environment variable must be set.");
+  process.exit(1);
+}
 
-if (!version || !modName) {
+// paths
+const modPath = path.resolve(__dirname, "mods", modName);
+const modinfoPath = path.join(modPath, "modinfo.ini");
+
+// Determine version: prefer env VERSION, fallback to mod's package.json version
+let version = process.env.VERSION;
+if (!version) {
+  const modPkgPath = path.join(modPath, "package.json");
+  try {
+    const modPkg = JSON.parse(fs.readFileSync(modPkgPath, "utf-8"));
+    version = modPkg.version;
+  } catch (e) {
+    // ignore, will validate below
+  }
+}
+
+if (!version) {
   console.error(
-    "Error: VERSION and MOD_NAME environment variables must be set."
+    "Error: VERSION environment variable not set and no version found in the mod's package.json."
   );
   process.exit(1);
 }
 
 console.log(`🚀 Building mod "${modName}" version ${version}`);
 
-// paths
-const modPath = path.resolve(__dirname, "mods", modName);
-const modinfoPath = path.join(modPath, "modinfo.ini");
-const distRoot = path.resolve(__dirname, "dist");
-const distPath = path.join(distRoot, modName);
-
-// ensure dist folders exist
-if (!fs.existsSync(distPath)) {
-  fs.mkdirSync(distPath, { recursive: true });
+// dist under the mod folder: mods/<modName>/dist
+const distRoot = path.resolve(modPath, "dist");
+if (!fs.existsSync(distRoot)) {
+  fs.mkdirSync(distRoot, { recursive: true });
 }
 
 // --- 1) Update modinfo.ini ---
