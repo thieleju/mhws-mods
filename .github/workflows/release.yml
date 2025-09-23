@@ -64,8 +64,7 @@ jobs:
 
       - name: Publish Release
         if: steps.extract_version.outputs.continue == 'true'
+        working-directory: ${{ env.MOD_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          cd $MOD_PATH
-          npx semantic-release
+        run: npx semantic-release
