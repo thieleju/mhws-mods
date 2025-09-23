@@ -1,0 +1,74 @@
+name: Release Mod
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      mod:
+        description: "Name of the mod to release (must match folder name in mods/)"
+        required: true
+        type: string
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Select mod
+        id: select_mod
+        run: |
+          if [ -n "${{ github.event.inputs.mod }}" ]; then
+            echo "MOD_NAME=${{ github.event.inputs.mod }}" >> $GITHUB_ENV
+            echo "MOD_PATH=mods/${{ github.event.inputs.mod }}" >> $GITHUB_ENV
+          else
+            echo "❌ No mod provided."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: ${{ env.MOD_PATH }}
+
+      - name: Semantic Release Dry Run (get next version)
+        id: semantic_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd $MOD_PATH
+          npx semantic-release --dry-run > semantic-output.txt
+
+      - name: Extract version
+        id: extract_version
+        run: |
+          VERSION=$(grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+' $MOD_PATH/semantic-output.txt || true)
+          if [ -z "$VERSION" ]; then
+            echo "No version found, skipping release."
+            echo "continue=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "continue=true" >> $GITHUB_OUTPUT
+          echo "Next version: $VERSION"
+
+      - name: Build mod
+        if: steps.extract_version.outputs.continue == 'true'
+        run: npm run build
+        working-directory: ${{ env.MOD_PATH }}
+        env:
+          VERSION: ${{ env.VERSION }}
+          MOD_NAME: ${{ env.MOD_NAME }}
+
+      - name: Publish Release
+        if: steps.extract_version.outputs.continue == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd $MOD_PATH
+          npx semantic-release
