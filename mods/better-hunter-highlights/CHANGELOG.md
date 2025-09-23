@@ -1,3 +1,10 @@
+## [1.4.3](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.4.2...better-hunter-highlights-v1.4.3) (2025-09-23)
+
+
+### Bug Fixes
+
+* ensure pkgRoot is set in releaserc configuration ([e621c4b](https://github.com/thieleju/mhws-mods/commit/e621c4b92a43741437de1cc336ed6f6d19134954))
+
 ## [1.4.2](https://github.com/thieleju/mhws-better-hunter-highlights/compare/v1.4.1...v1.4.2) (2025-08-09)
 
 
