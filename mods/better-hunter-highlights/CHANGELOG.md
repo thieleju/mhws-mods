@@ -1,3 +1,15 @@
+# [1.5.0](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.4.3...better-hunter-highlights-v1.5.0) (2025-09-23)
+
+
+### Bug Fixes
+
+* test commit ([79ccc36](https://github.com/thieleju/mhws-mods/commit/79ccc36c5cad730d5dbbe77e7fba5d20315aa738))
+
+
+### Features
+
+* update build script ([ec9b36a](https://github.com/thieleju/mhws-mods/commit/ec9b36a979b7c888952489d182077b1d579c9376))
+
 ## [1.4.3](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.4.2...better-hunter-highlights-v1.4.3) (2025-09-23)
 
 
