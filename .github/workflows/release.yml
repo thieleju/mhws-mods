@@ -8,6 +8,9 @@ on:
         required: true
         type: string
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -70,3 +73,21 @@ jobs:
         run: |
           cd "$MOD_PATH"
           npx semantic-release
+      - name: Update Latest Releases links in README
+        if: steps.extract_version.outputs.continue == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Ensure we are at repo root
+          cd "$GITHUB_WORKSPACE"
+          # Re-generate Latest Releases section deterministically from mods/*/modinfo.ini
+          node update-readme.js | tee update_output.txt
+          if grep -q "README_UPDATED" update_output.txt; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add README.md
+            git commit -m "docs(readme): update Latest Releases links [skip ci]"
+            git push
+          else
+            echo "README already up to date."
+          fi
