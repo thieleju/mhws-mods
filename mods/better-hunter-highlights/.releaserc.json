@@ -19,12 +19,7 @@
         "path": "mods/better-hunter-highlights"
       }
     ],
-    [
-      "@semantic-release/changelog",
-      {
-        "changelogFile": "CHANGELOG.md"
-      }
-    ],
+    "@semantic-release/changelog",
     [
       "@semantic-release/git",
       {
@@ -36,16 +31,6 @@
         "message": "chore(release): ${nextRelease.version} [skip ci]"
       }
     ],
-    [
-      "@semantic-release/github",
-      {
-        "assets": [
-          {
-            "path": "dist/${name}-v${nextRelease.version}.zip",
-            "label": "Mod Release"
-          }
-        ]
-      }
-    ]
+    "@semantic-release/github"
   ]
 }
