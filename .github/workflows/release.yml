@@ -1,9 +1,6 @@
 name: Release Mod
 
 on:
-  push:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       mod:
