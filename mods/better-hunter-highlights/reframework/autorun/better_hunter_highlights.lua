@@ -1,8 +1,7 @@
 --
 -- Better Hunter Highlights
 --
--- Show detailed player awards and damage stats in a REFramework UI window and the hunter highlights sub menus.
--- Hooks into quest sync and result methods to collect and summarize player awards
+-- @author github.com/thieleju
 --
 ---@diagnostic disable: undefined-global, undefined-doc-name
 
