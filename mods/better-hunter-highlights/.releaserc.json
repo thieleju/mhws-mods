@@ -3,6 +3,7 @@
     "main"
   ],
   "tagFormat": "better-hunter-highlights-v${version}",
+  "pkgRoot": "mods/better-hunter-highlights",
   "plugins": [
     [
       "@semantic-release/commit-analyzer",
