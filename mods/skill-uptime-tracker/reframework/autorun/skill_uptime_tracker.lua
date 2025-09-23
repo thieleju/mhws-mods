@@ -3,7 +3,6 @@
 --
 -- @author https://github.com/thieleju
 --
---
 ---@diagnostic disable: undefined-global, undefined-doc-name
 
 -- Type definitions
