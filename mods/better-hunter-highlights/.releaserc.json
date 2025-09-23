@@ -2,24 +2,17 @@
   "branches": [
     "main"
   ],
-  "tagFormat": "${version}",
   "repositoryUrl": "https://github.com/thieleju/mhws-mods.git",
+  "tagFormat": "better-hunter-highlights-v${version}",
   "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
     [
-      "@semantic-release/commit-analyzer",
+      "@semantic-release/changelog",
       {
-        "preset": "angular",
-        "path": "mods/better-hunter-highlights"
+        "changelogFile": "CHANGELOG.md"
       }
     ],
-    [
-      "@semantic-release/release-notes-generator",
-      {
-        "preset": "angular",
-        "path": "mods/better-hunter-highlights"
-      }
-    ],
-    "@semantic-release/changelog",
     [
       "@semantic-release/git",
       {
