@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/thieleju/mhws-mods/compare/skill-uptime-tracker-v1.2.0...skill-uptime-tracker-v1.3.0) (2025-09-24)
+
+
+### Features
+
+* add customizability and fix skills like gore ([1bf45d2](https://github.com/thieleju/mhws-mods/commit/1bf45d23e3e6512d50cb80887f427c9e59d92f83))
+
 # [1.2.0](https://github.com/thieleju/mhws-mods/compare/skill-uptime-tracker-v1.1.0...skill-uptime-tracker-v1.2.0) (2025-09-23)
 
 
