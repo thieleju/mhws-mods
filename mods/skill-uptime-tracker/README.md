@@ -16,3 +16,13 @@
 ## Usage
 
 - After installation, configure options via REFramework menu and click `Show Skill Uptime Overview`
+
+## Screenshots
+
+![screenshot1](./assets/screenshot1.png)
+
+![screenshot2](./assets/screenshot2.png)
+
+![screenshot3](./assets/screenshot3.png)
+
+![screenshot4](./assets/screenshot4.png)
