@@ -7,77 +7,92 @@
 --
 ---@diagnostic disable: undefined-global, undefined-doc-name, undefined-field
 
-local TD_MessageUtil          = sdk.find_type_definition("app.MessageUtil")
-local TD_HunterSkillDef       = sdk.find_type_definition("app.HunterSkillDef")
-local TD_GuiMessage           = sdk.find_type_definition("via.gui.message")
-local TD_SkillEnum            = sdk.find_type_definition("app.HunterDef.Skill")
-local TD_SkillParamInfo       = sdk.find_type_definition("app.cHunterSkillParamInfo")
-local TD_QuestPlaying         = sdk.find_type_definition("app.cQuestPlaying")
-local TD_SoundMusic           = sdk.find_type_definition("app.SoundMusicManager")
-local TD_BattleMusic          = sdk.find_type_definition("app.BattleMusicManager")
-local TD_MissionManager       = sdk.find_type_definition("app.MissionManager")
-local TD_App                  = sdk.find_type_definition("via.Application")
-local TD_HunterCharacter      = sdk.find_type_definition("app.HunterCharacter")
-local TD_EnemyCharacter       = sdk.find_type_definition("app.EnemyCharacter")
-local TD_cHunterSkill         = sdk.find_type_definition("app.cHunterSkill")
-local TD_SkillParamInfo_cInfo = sdk.find_type_definition("app.cHunterSkillParamInfo.cInfo")
-local TD_StatusFlagEnum       = sdk.find_type_definition("app.HunterDef.STATUS_FLAG")
-local TD_ItemDef              = sdk.find_type_definition("app.ItemDef")
-local TYPE_EnemyCharacter     = sdk.typeof(TD_EnemyCharacter:get_full_name())
-local TYPE_HunterCharacter    = sdk.typeof(TD_HunterCharacter:get_full_name())
+-- ============================================================================
+-- Type Definitions
+-- ============================================================================
+local TD_MessageUtil            = sdk.find_type_definition("app.MessageUtil")
+local TD_HunterSkillDef         = sdk.find_type_definition("app.HunterSkillDef")
+local TD_GuiMessage             = sdk.find_type_definition("via.gui.message")
+local TD_SkillEnum              = sdk.find_type_definition("app.HunterDef.Skill")
+local TD_SkillParamInfo         = sdk.find_type_definition("app.cHunterSkillParamInfo")
+local TD_QuestPlaying           = sdk.find_type_definition("app.cQuestPlaying")
+local TD_SoundMusic             = sdk.find_type_definition("app.SoundMusicManager")
+local TD_BattleMusic            = sdk.find_type_definition("app.BattleMusicManager")
+local TD_MissionManager         = sdk.find_type_definition("app.MissionManager")
+local TD_App                    = sdk.find_type_definition("via.Application")
+local TD_HunterCharacter        = sdk.find_type_definition("app.HunterCharacter")
+local TD_EnemyCharacter         = sdk.find_type_definition("app.EnemyCharacter")
+local TD_cHunterSkill           = sdk.find_type_definition("app.cHunterSkill")
+local TD_SkillParamInfo_cInfo   = sdk.find_type_definition("app.cHunterSkillParamInfo.cInfo")
+local TD_HunterSkillUpdater     = sdk.find_type_definition("app.HunterSkillUpdater")
+local TD_ItemDef                = sdk.find_type_definition("app.ItemDef")
+local TD_ActionGuideID          = sdk.find_type_definition("app.ActionGuideID")
 
-local FN_GetSkillName         =
+-- ============================================================================
+-- Type Constants
+-- ============================================================================
+local TYPE_EnemyCharacter       = sdk.typeof(TD_EnemyCharacter:get_full_name())
+local TYPE_HunterCharacter      = sdk.typeof(TD_HunterCharacter:get_full_name())
+
+-- ============================================================================
+-- Method Definitions
+-- ============================================================================
+local FN_GetSkillName           =
     TD_MessageUtil:get_method("getHunterSkillName(app.HunterDef.Skill)") or nil
-local FN_GetLeveledSkillName  =
+local FN_GetLeveledSkillName    =
     TD_MessageUtil:get_method("getHunterSkillNameChatLog(app.HunterDef.Skill, System.Int32)") or nil
-local FN_ConvertSkillToGroup  =
+local FN_ConvertSkillToGroup    =
     TD_HunterSkillDef:get_method("convertSkillToGroupSkill(app.HunterDef.Skill)") or nil
-local FN_GetMsg               = TD_GuiMessage:get_method("get(System.Guid)") or nil
-local FN_GetMsgLang           = TD_GuiMessage:get_method("get(System.Guid, via.Language)") or nil
-local FN_BeginSkillLog        =
+local FN_GetMsg                 = TD_GuiMessage:get_method("get(System.Guid)") or nil
+local FN_GetMsgLang             = TD_GuiMessage:get_method("get(System.Guid, via.Language)") or nil
+local FN_BeginSkillLog          =
     TD_SkillParamInfo:get_method("beginSkillLog(app.HunterDef.Skill)") or nil
-local FN_EndSkillLog          =
+local FN_EndSkillLog            =
     TD_SkillParamInfo:get_method("endSkillLog(app.HunterDef.Skill)") or nil
-local FN_QuestEnter           = TD_QuestPlaying:get_method("enter()") or nil
-local FN_GetBattleMusic       = TD_SoundMusic:get_method("get_BattleMusic()") or nil
-local FN_IsBattle             = TD_BattleMusic:get_method("get_IsBattle()") or nil
-local FN_IsActiveQuest        = TD_MissionManager:get_method("get_IsActiveQuest()") or nil
-local FN_IsPlayingQuest       = TD_MissionManager:get_method("get_IsPlayingQuest()") or nil
-local FN_Now                  = TD_App:get_method("get_UpTimeSecond") or nil
-local FN_SetStatusBuff        =
+local FN_QuestEnter             = TD_QuestPlaying:get_method("enter()") or nil
+local FN_GetBattleMusic         = TD_SoundMusic:get_method("get_BattleMusic()") or nil
+local FN_IsBattle               = TD_BattleMusic:get_method("get_IsBattle()") or nil
+local FN_IsActiveQuest          = TD_MissionManager:get_method("get_IsActiveQuest()") or nil
+local FN_IsPlayingQuest         = TD_MissionManager:get_method("get_IsPlayingQuest()") or nil
+local FN_Now                    = TD_App:get_method("get_UpTimeSecond") or nil
+local FN_SetStatusBuff          =
     TD_HunterCharacter:get_method("setStatusBuff(app.HunterDef.STATUS_FLAG, System.Single, System.Single)") or nil
-local FN_HunterHitPost        =
-    TD_HunterCharacter:get_method("evHit_AttackPostProcess(app.HitInfo)") or nil
-local FN_GetSkillLevel2       =
-    TD_cHunterSkill:get_method("getSkillLevel(app.HunterDef.Skill, System.Boolean, System.Boolean)") or nil
-local FN_ItemDef_RawName      = TD_ItemDef:get_method("RawName(app.ItemDef.ID)") or nil
-local FN_MessageUtil_get      = TD_MessageUtil:get_method("get(System.Guid)") or nil
+local FN_HunterHitPost          = TD_HunterCharacter:get_method("evHit_AttackPostProcess(app.HitInfo)") or nil
+local FN_SkillUpdaterLateUpdate = TD_HunterSkillUpdater and TD_HunterSkillUpdater:get_method("lateUpdate()") or nil
+local FN_GetSkillLevel2         = TD_cHunterSkill:get_method(
+  "getSkillLevel(app.HunterDef.Skill, System.Boolean, System.Boolean)") or nil
+local FN_GetItemNameRaw         = TD_ItemDef and TD_ItemDef:get_method("RawName(app.ItemDef.ID)") or nil
 
-local FLD_Info_Skill          = TD_SkillParamInfo_cInfo:get_field("_Skill") or nil
-local FLD_Info_Timer          = TD_SkillParamInfo_cInfo:get_field("_Timer") or nil
-local FLD_Info_MaxTimer       = TD_SkillParamInfo_cInfo:get_field("_MaxTimer") or nil
-local FLD_Challenger          = TD_SkillParamInfo:get_field("_IsActiveChallenger") or nil
-local FLD_FullCharge          = TD_SkillParamInfo:get_field("_IsActiveFullCharge") or nil
-local FLD_Konshin             = TD_SkillParamInfo:get_field("_IsActiveKonshin") or nil
-local FLD_KonshinUse          = TD_SkillParamInfo:get_field("_KonshinStaminaUseTime") or nil
-local SkillIDMax              = TD_SkillEnum:get_field("MAX"):get_data() or nil
+-- ============================================================================
+-- Field Definitions
+-- ============================================================================
+local FLD_FullCharge            = TD_SkillParamInfo:get_field("_IsActiveFullCharge") or nil
+local FLD_Konshin               = TD_SkillParamInfo:get_field("_IsActiveKonshin") or nil
+local FLD_KonshinUse            = TD_SkillParamInfo:get_field("_KonshinStaminaUseTime") or nil
+local FLD_Challenger            = TD_SkillParamInfo:get_field("_IsActiveChallenger") or nil
+local FLD_Info_Skill            = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_Skill") or nil
+local FLD_Info_Timer            = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_Timer") or nil
+local FLD_Info_MaxTimer         = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_MaxTimer") or nil
+local SkillIDMax                = TD_SkillEnum:get_field("MAX"):get_data() or nil
 
--- Config for skil_uptime_tracker.json
-local config                  = {
+-- ============================================================================
+-- Configuration and State Management
+-- ============================================================================
+local config                    = {
   openWindow = false,
   strategyIndex = 1,
-  show = { skills = true, items = false, weapons = false, flags = false },
+  show = { skills = true, items = false, flags = false, weapons = false, movedamage = true },
   columns = { primary = true, percent = true, active = true, state = true },
   debug = false,
   hideButtons = false,
 }
 
 -- Module namespace
-local SkillUptime             = {
+local SkillUptime               = {
   UI       = {
     defaultFont = nil,
     open = false,
-    tables = { Skills = true, Items = false, Weapons = false, Flags = false },
+    tables = { Skills = true, Items = false, Flags = false, Weapons = false, MoveDamage = true },
     columns = { Primary = true, Percent = true, Active = true, State = true },
   },
   Strategy = {
@@ -85,7 +100,6 @@ local SkillUptime             = {
     defs = {
       { label = "In combat",       useHitsView = false, showBattleHeader = true,  accumulateTime = true },
       { label = "Hits (up/total)", useHitsView = true,  showBattleHeader = false, accumulateTime = false },
-      { label = "Move Damage",     useHitsView = false, showBattleHeader = true,  accumulateTime = false, moveDamage = true },
     },
     labels = {},
   },
@@ -111,23 +125,24 @@ local SkillUptime             = {
     timing_starts = {},
     uptime = {},
     hits_up = {},
-    Names = {
-      Kairiki = "Attack Seed",
-      KairikiG = "Attack Pill",
-      Nintai = "Defense Seed",
-      NintaiG = "Defense Pill",
-      KijinPowder = "Demondrug Powder",
-      KoukaPowder = "Armorskin Powder",
-      KijinAmmo = "Demondrug Ammo",
-      KoukaAmmo = "Armorskin Ammo",
-      DashJuice = "Dash Juice",
-      Immunizer = "Immunizer",
-      HotDrink = "Hot Drink",
-      CoolerDrink = "Cool Drink",
-      KijinDrink = "Demondrug",
-      KijinDrinkG = "Might Pill",
-      KoukaDrink = "Armorskin",
-      KoukaDrinkG = "Adamant Pill",
+    name_cache = {},
+    ItemIDs = {
+      Kairiki = 125,
+      KairikiG = 168,
+      Nintai = 126,
+      NintaiG = 171,
+      KijinPowder = 175,
+      KoukaPowder = 176,
+      KijinAmmo = 412,
+      KoukaAmmo = 413,
+      DashJuice = 163,
+      Immunizer = 164,
+      HotDrink = 166,
+      CoolerDrink = 165,
+      KijinDrink = 167,
+      KijinDrinkG = 169,
+      KoukaDrink = 170,
+      KoukaDrinkG = 172,
     },
   },
   Weapons  = { data = {}, timing_starts = {}, uptime = {}, hits_up = {} },
@@ -138,12 +153,14 @@ local SkillUptime             = {
     names = {},
     total = 0,
     lastWeaponType = nil,
-    last_hit_time = {}, -- moveKey -> last timestamp of a hit
-    active_start = {},  -- moveKey -> segment start time (if currently active)
-    active_accum = {},  -- moveKey -> accumulated active seconds
-    colIds = {},        -- moveKey -> collision id
-    wpTypes = {},       -- moveKey -> weapon type
-    wmap = {            -- weapon type short codes
+    last_hit_time = {},     -- moveKey -> last timestamp of a hit
+    active_start = {},      -- moveKey -> segment start time (if currently active)
+    active_accum = {},      -- moveKey -> accumulated active seconds
+    colIds = {},            -- moveKey -> collision id
+    wpTypes = {},           -- moveKey -> weapon type
+    action_name_cache = {}, -- ActionGuideID -> localized name
+    action_names_inited = false,
+    wmap = {                -- weapon type short codes
       [0] = "GS",
       [1] = "SNS",
       [2] = "DB",
@@ -172,7 +189,9 @@ local SkillUptime             = {
     CONFIG_PATH = "skill_uptime_tracker.json",
     FRENZY_SKILL_ID = 194,
     SEREGIOS_TENACITY_SKILL_ID = 217,
-    MOVE_ACTIVE_GAP = 2.0, -- seconds; gap threshold to close an activity segment for a move
+    MOVE_ACTIVE_GAP = 2.0,       -- seconds; gap threshold to close an activity segment for a move
+    MOVE_TABLE_MAX_HEIGHT = 260, -- pixels; max height for Move Damage table before scrolling
+    EPSILON = 0.0005,
   },
   -- Ensure sub-namespaces exist before assigning functions
   Util     = {},
@@ -181,12 +200,15 @@ local SkillUptime             = {
   Hooks    = {},
 }
 
+-- ============================================================================
+-- Initialization & Data Tables
+-- ============================================================================
 for i, s in ipairs(SkillUptime.Strategy.defs) do SkillUptime.Strategy.labels[i] = s.label end
 
 -- Singleton cache
 local _SINGLETON_CACHE = {}
 
--- Status flags
+-- Status flags mapping
 local FLAGS_NAME_MAP   = {
   [0] = "No Damage",
   [1] = "Friendly Fire Disabled",
@@ -198,6 +220,19 @@ local FLAGS_NAME_MAP   = {
   [7] = "Super Armor",
   [8] = "Hyper Armor",
   [9] = "Pause Status Timers",
+  [10] = "Ignore Status Timer Pause",
+  [11] = "Stop Red Health Recovery",
+  [12] = "Disable Red Health",
+  [13] = "Stop Stamina Recovery",
+  [14] = "No Stamina Consumption",
+  [15] = "Keep Stun Request",
+  [16] = "No Damage Reaction",
+  [17] = "Cannot Die",
+  [18] = "No Small Damage Reaction",
+  [19] = "No Slip Damage Reaction",
+  [20] = "Slip → Small Reaction",
+  [21] = "Refresh Skill Gauge",
+  [22] = "Meal Effects Active",
   [23] = "In Thorns",
   [24] = "In Hiding Bush",
   [25] = "In Smoke",
@@ -294,6 +329,15 @@ local FLAGS_NAME_MAP   = {
   [116] = "Max",
 }
 
+-- ============================================================================
+-- Utility Functions
+-- ============================================================================
+-- Helper function to get current time (shorthand for SkillUptime.Core.now())
+local function now()
+  return SkillUptime.Core.now()
+end
+
+-- Populate dynamic flag names from enum
 if TD_StatusFlagEnum then
   local ok, fields = pcall(function() return TD_StatusFlagEnum:get_fields() end)
   if ok and fields then
@@ -313,112 +357,155 @@ end
 
 SkillUptime.Util.logError = function(msg) log.error(SkillUptime.Const.PREFIX .. tostring(msg)) end
 
--- Localized shell label builder (lazy)
+-- Shell label mapping (gunlance shells)
 local function _build_shell_label_map()
-  local shells = {}
-  -- mapping attackIndex -> ItemDef ID (guessed/known subset)
-  local idMap = {
-    [0] = 37,
-    [1] = 38,
-    [20] = 39,
-    [9] = 40,
-    [5] = 44,
-    [6] = 45,
-    [11] = 47,
-    [13] = 48,
-    [12] = 49,
-    [23] = 50,
-    [29] = 153,
-    [30] = 153
+  return {
+    [0] = "Normal Lv1",
+    [1] = "Normal Lv2",
+    [20] = "Normal Lv3",
+    [9] = "Pierce Lv1",
+    [5] = "Pierce Lv2",
+    [6] = "Pierce Lv3",
+    [11] = "Spread Lv1",
+    [13] = "Spread Lv2",
+    [12] = "Spread Lv3",
+    [23] = "Wyvern Fire",
+    [29] = "Shelling Burst",
+    [30] = "Shelling Burst",
+    [38] = "Focus",
+    [58] = "Focus2",
+    [40] = "Mine",
+    [21] = "Roar",
+    [19] = "Roar2",
+    [16] = "HeatCnt",
+    [26] = "HeatCnt2",
+    [14] = "HeatEgg",
   }
-  for idx, itemId in pairs(idMap) do
-    local label
-    if FN_ItemDef_RawName and FN_MessageUtil_get then
-      local okRN, guid = pcall(function() return FN_ItemDef_RawName:call(nil, itemId) end)
-      if okRN and guid then
-        local okL, txt = pcall(function() return FN_MessageUtil_get:call(nil, guid) end)
-        if okL and txt and txt ~= "" then label = txt end
-      end
-    end
-    shells[idx] = label or string.format("Item%d", itemId)
-  end
-  -- Extra fixed IDs (specials)
-  shells[38] = shells[38] or "Focus"
-  shells[58] = shells[58] or "Focus2"
-  shells[40] = shells[40] or "Mine"
-  shells[21] = shells[21] or "Roar"
-  shells[19] = shells[19] or "Roar2"
-  shells[16] = shells[16] or "HeatCnt"
-  shells[26] = shells[26] or "HeatCnt2"
-  shells[14] = shells[14] or "HeatEgg"
-  return shells
 end
 
-SkillUptime.Moves.get_action_name = function(hitInfo)
-  if not hitInfo then return nil end
-  local playerMgr = SkillUptime.Core.GetSingleton and SkillUptime.Core.GetSingleton("app.PlayerManager") or nil
-  if not playerMgr then return nil end
-  local okMaster, masterInfo = pcall(function() return playerMgr:getMasterPlayer() end); if not okMaster or not masterInfo then return nil end
-  local okChar, hunter = pcall(function() return masterInfo:get_Character() end); if not okChar or not hunter then return nil end
-  local okWT, wpType = pcall(function() return hunter:get_WeaponType() end); if not okWT then return nil end
-  -- skip bowguns for action naming (their indices collide with shells)
-  if wpType == 8 or wpType == 9 then return nil end
-  local okAtk, atkIdxObj = pcall(function() return hitInfo:get_AttackIndex() end); if not okAtk or not atkIdxObj then return nil end
-  local attackIndex = atkIdxObj._Index; if not attackIndex then return nil end
-  -- A-Skill detection via collision ID heuristic
-  local okAD, atkData = pcall(function() return hitInfo:get_AttackData() end)
-  if okAD and atkData and atkData._RuntimeData and atkData._RuntimeData._CollisionDataID then
-    local colID = atkData._RuntimeData._CollisionDataID._Index
-    if colID and _moves_is_as_skill_005 and _moves_is_as_skill_005(wpType, colID) then return "A-Skill" end
-  end
-  -- Shell owner path (localized names)
-  local okOwner, owner = pcall(function() return hitInfo:get_AttackHit()._Owner end)
-  if okOwner and owner and owner.get_Name then
-    local ownerName = owner:get_Name()
-    if ownerName and (ownerName:find("WpGunShell", 1, true) or ownerName:find("WpGunConstShell", 1, true)) then
-      local shells = SkillUptime.Moves._gunShellNames
-      if not shells then
-        shells = _build_shell_label_map()
-        SkillUptime.Moves._gunShellNames = shells
-      end
-      local sh = shells[attackIndex]; if sh then return sh end
-    end
-  end
-  return nil
-end
+-- Initialize action name lookup from ActionGuideID
+SkillUptime.Moves.init_action_names = function()
+  if SkillUptime.Moves.action_names_inited then return end
+  SkillUptime.Moves.action_names_inited = true
 
--- Returns only a descriptive move name using local logic
-SkillUptime.Moves.resolve_name = function(hitInfo)
-  if not hitInfo then return "EMPTY" end
-  -- Primary: embedded action resolver
-  local nm = SkillUptime.Moves.get_action_name(hitInfo)
-  if nm and nm ~= '' then return nm end
-  -- Fallback: action class name
-  local okActual, actualOwner = pcall(function() return hitInfo:getActualAttackOwner() end)
-  local hunter = nil
-  if okActual and actualOwner and actualOwner.getComponent then
-    local okHC, h = pcall(function() return actualOwner:getComponent(TYPE_HunterCharacter) end)
-    if okHC then hunter = h end
-  end
-  local actionClass = nil
-  if hunter then
-    local okBAC, bac = pcall(function() return hunter:get_BaseActionController() end)
-    if okBAC and bac and bac.get_CurrentAction then
-      local okCA, act = pcall(function() return bac:get_CurrentAction() end)
-      if okCA and act and act.get_type_definition then
-        local td = act:get_type_definition(); if td and td.get_name then
-          local okTN, nmC = pcall(function() return td:get_name() end)
-          if okTN and nmC and nmC ~= '' then actionClass = nmC:gsub('^cAct', '') end
+  local mgr = SkillUptime.Core.GetSingleton("app.VariousDataManager")
+  if not mgr or not mgr._Setting or not mgr._Setting._ActionGuideSetting then return end
+
+  local dataset = mgr._Setting._ActionGuideSetting
+  if not TD_ActionGuideID then return end
+
+  -- Iterate through all weapon types (0-13)
+  for wpType = 0, 13 do
+    local key = string.format("_ActionGuideName_Wp%02d", wpType)
+    local data = dataset[key]
+    if data then
+      local okValues, values = pcall(function() return data:getValues() end)
+      if okValues and values then
+        local okEach, _ = pcall(function()
+          for i = 0, values:get_Count() - 1 do
+            local cData = values:get_Item(i)
+            if cData then
+              local actionFixedID = cData._Action
+              if actionFixedID and cData._ActionName then
+                local name = SkillUptime.Util.get_localized_text(cData._ActionName)
+                if SkillUptime.Util.is_valid_name(name) then
+                  SkillUptime.Moves.action_name_cache[actionFixedID] = name
+                end
+              end
+            end
+          end
+        end)
+        if not okEach then
+          SkillUptime.Util.logDebug(string.format("Failed to iterate action names for weapon %d", wpType))
         end
       end
     end
   end
-  if actionClass then return actionClass end
-  -- Final fallback: resource/index pair
-  local okAtk, atkIdxObj = pcall(function() return hitInfo:get_AttackIndex() end)
-  if okAtk and atkIdxObj then
-    return string.format("Atk %d/%d", atkIdxObj._Resource or -1, atkIdxObj._Index or -1)
+  SkillUptime.Util.logDebug(string.format("Initialized %d action names",
+    SkillUptime.Util.table_length(SkillUptime.Moves.action_name_cache)))
+end
+
+SkillUptime.Moves.get_action_name = function(hitInfo)
+  if not hitInfo then return nil end
+
+  local playerMgr = SkillUptime.Core.GetSingleton("app.PlayerManager")
+  if not playerMgr then return nil end
+
+  local okMaster, masterInfo = pcall(function() return playerMgr:getMasterPlayer() end)
+  if not okMaster or not masterInfo then return nil end
+
+  local okChar, hunter = pcall(function() return masterInfo:get_Character() end)
+  if not okChar or not hunter then return nil end
+
+  local okWT, wpType = pcall(function() return hunter:get_WeaponType() end)
+  if not okWT then return nil end
+
+  -- Skip bowguns for action naming (their indices collide with shells)
+  if wpType == 8 or wpType == 9 then return nil end
+  -- Check for gunlance shells
+  local okOwner, owner = pcall(function() return hitInfo:get_AttackHit()._Owner end)
+  if okOwner and owner and owner.get_Name then
+    local ownerName = owner:get_Name()
+    if ownerName and (ownerName:find("WpGunShell", 1, true) or ownerName:find("WpGunConstShell", 1, true)) then
+      if not SkillUptime.Moves._gunShellNames then
+        SkillUptime.Moves._gunShellNames = _build_shell_label_map()
+      end
+      local attackIndex = hitInfo:get_AttackIndex()._Index
+      return SkillUptime.Moves._gunShellNames[attackIndex]
+    end
   end
+
+  return nil
+end
+
+-- Get descriptive move name from hit info
+SkillUptime.Moves.resolve_name = function(hitInfo)
+  if not hitInfo then return "Unknown" end
+
+  -- Initialize action names on first use
+  SkillUptime.Moves.init_action_names()
+
+  -- Try to get action name (shells, etc.)
+  local actionName = SkillUptime.Moves.get_action_name(hitInfo)
+  if actionName and actionName ~= '' then return actionName end
+
+  -- Try to get action from hunter and check for ActionGuideID
+  local ok, owner = pcall(function() return hitInfo:getActualAttackOwner() end)
+  if ok and owner and owner.getComponent then
+    local okHC, hunter = pcall(function() return owner:getComponent(TYPE_HunterCharacter) end)
+    if okHC and hunter then
+      local okBAC, controller = pcall(function() return hunter:get_BaseActionController() end)
+      if okBAC and controller then
+        local okAct, action = pcall(function() return controller:get_CurrentAction() end)
+        if okAct and action then
+          -- Try to get localized name from ActionGuideID
+          local okGuide, guideID = pcall(function() return action._ActionGuideID end)
+          if okGuide and guideID and guideID ~= -1 then
+            local localizedName = SkillUptime.Moves.action_name_cache[guideID]
+            if localizedName then
+              return localizedName
+            end
+          end
+
+          -- Fallback: get action class name
+          local okTD, typeDef = pcall(function() return action:get_type_definition() end)
+          if okTD and typeDef then
+            local okName, className = pcall(function() return typeDef:get_name() end)
+            if okName and className and className ~= '' then
+              return className:gsub('^cAct', '')
+            end
+          end
+        end
+      end
+    end
+  end
+
+  -- Fallback: attack index
+  local okAtk, atkIdx = pcall(function() return hitInfo:get_AttackIndex() end)
+  if okAtk and atkIdx then
+    return string.format("Atk %d/%d", atkIdx._Resource or -1, atkIdx._Index or -1)
+  end
+
   return "Unknown"
 end
 
@@ -452,6 +539,7 @@ SkillUptime.Config.apply = function()
   SkillUptime.UI.tables.Items = (config.show and config.show.items) or SkillUptime.UI.tables.Items
   SkillUptime.UI.tables.Weapons = (config.show and config.show.weapons) or SkillUptime.UI.tables.Weapons
   SkillUptime.UI.tables.Flags = (config.show and config.show.flags) or SkillUptime.UI.tables.Flags
+  SkillUptime.UI.tables.MoveDamage = (config.show and config.show.movedamage ~= false)
   SkillUptime.UI.columns.Primary = (config.columns and config.columns.primary ~= false)
   SkillUptime.UI.columns.Percent = (config.columns and config.columns.percent ~= false)
   SkillUptime.UI.columns.Active = (config.columns and config.columns.active ~= false)
@@ -470,6 +558,7 @@ SkillUptime.Config.load = function()
     config.show.items = (loaded.show.items == true)
     config.show.weapons = (loaded.show.weapons == true)
     config.show.flags = (loaded.show.flags == true)
+    config.show.movedamage = (loaded.show.movedamage ~= false)
   end
   if type(loaded.columns) == "table" then
     config.columns.primary = (loaded.columns.primary ~= false)
@@ -479,6 +568,7 @@ SkillUptime.Config.load = function()
   end
   if type(loaded.debug) == "boolean" then config.debug = loaded.debug end
   if type(loaded.hideButtons) == "boolean" then config.hideButtons = loaded.hideButtons end
+  -- transparency removed
   -- Apply loaded config immediately to UI state
   SkillUptime.Config.apply()
 end
@@ -492,22 +582,20 @@ SkillUptime.Core.registerHook = function(method, pre, post)
   if not ok then SkillUptime.Util.logError("Failed to hook method: " .. tostring(err)) end
 end
 
--- Safe singleton access
+-- Cached singleton access
 SkillUptime.Core.GetSingleton = function(name)
-  local cached = _SINGLETON_CACHE[name]
-  if cached ~= nil then return cached or nil end
-  local ok, v = pcall(function() return sdk.get_managed_singleton(name) end)
-  if ok and v ~= nil then
-    _SINGLETON_CACHE[name] = v; return v
+  if _SINGLETON_CACHE[name] ~= nil then
+    return _SINGLETON_CACHE[name] or nil
   end
-  _SINGLETON_CACHE[name] = false; return nil
+
+  local ok, singleton = pcall(function() return sdk.get_managed_singleton(name) end)
+  _SINGLETON_CACHE[name] = (ok and singleton) or false
+  return _SINGLETON_CACHE[name] or nil
 end
 
 SkillUptime.Core.now = function()
-  if FN_Now then return FN_Now:call(nil) end
-  return os.clock()
+  return FN_Now and FN_Now:call(nil) or os.clock()
 end
-local now = SkillUptime.Core.now
 
 SkillUptime.Util.fmt_mss_hh = function(total)
   total = total or 0
@@ -552,7 +640,7 @@ SkillUptime.Core.build_rows = function(registry, uptimeMap, startTimes, epsilon,
     local base = uptimeMap[key] or 0.0
     local live = 0.0
     if startTimes[key] then
-      live = now() - startTimes[key]; if live < 0 then live = 0 end
+      live = SkillUptime.Core.now() - startTimes[key]; if live < 0 then live = 0 end
     end
     local total = base + live
     local active = rec.Activated and true or false
@@ -605,9 +693,22 @@ SkillUptime.Util.is_valid_name = function(name)
   return true
 end
 
+SkillUptime.Util.table_length = function(tbl)
+  local count = 0
+  for _ in pairs(tbl or {}) do count = count + 1 end
+  return count
+end
+
 SkillUptime.Skills.resolve_name = function(skill_id, level)
   if not skill_id or skill_id < 0 then return "[INVALID_SKILL]" end
   if SkillIDMax and skill_id >= SkillIDMax then return "[INVALID_SKILL]" end
+
+  -- Check cache first (with level key if provided)
+  local cache_key = level and (skill_id .. "_L" .. level) or skill_id
+  if SkillUptime.Skills.name_cache[cache_key] then
+    return SkillUptime.Skills.name_cache[cache_key]
+  end
+
   local function try(skill, lv)
     if lv and FN_GetLeveledSkillName then
       local guid = FN_GetLeveledSkillName:call(nil, skill, lv)
@@ -625,63 +726,119 @@ SkillUptime.Skills.resolve_name = function(skill_id, level)
     end
     return nil
   end
+
   local name = try(skill_id, level)
-  if name then return name end
+  if name then
+    SkillUptime.Skills.name_cache[cache_key] = name
+    return name
+  end
+
   if FN_ConvertSkillToGroup then
     local group_skill = FN_ConvertSkillToGroup:call(nil, skill_id)
     if group_skill and group_skill > 0 and group_skill ~= skill_id then
       name = try(group_skill, level)
-      if name then return name end
+      if name then
+        SkillUptime.Skills.name_cache[cache_key] = name
+        return name
+      end
     end
   end
+
   if not name and FN_GetLeveledSkillName then
     for lv = 1, 4 do
       name = try(skill_id, lv)
-      if name then return name end
+      if name then
+        SkillUptime.Skills.name_cache[cache_key] = name
+        return name
+      end
     end
   end
-  return string.format("Skill %d", skill_id)
+
+  local fallback = string.format("Skill %d", skill_id)
+  SkillUptime.Skills.name_cache[cache_key] = fallback
+  return fallback
 end
 
 SkillUptime.Skills.extract_skill_id_from_args = function(args)
-  for i = 3, 6 do
+  -- Try a wider range to be resilient to signature shifts across game updates
+  for i = 1, 12 do
     local ok, id = pcall(function() return sdk.to_int64(args[i]) end)
     if ok and id ~= nil and id >= 0 and (not SkillIDMax or id < SkillIDMax) then return id end
   end
   return nil
 end
 
+SkillUptime.Items.resolve_name = function(key)
+  -- Check cache first
+  if SkillUptime.Items.name_cache[key] then
+    return SkillUptime.Items.name_cache[key]
+  end
+
+  -- Get ItemDef ID
+  local itemId = SkillUptime.Items.ItemIDs[key]
+  if not itemId or itemId < 0 then
+    SkillUptime.Util.logDebug(string.format("Item %s: No ItemID found, using key", key))
+    SkillUptime.Items.name_cache[key] = key
+    return key
+  end
+
+  -- Try to get localized name
+  if FN_GetItemNameRaw then
+    local ok, guid = pcall(function() return FN_GetItemNameRaw:call(nil, itemId) end)
+    if ok and guid then
+      local name = SkillUptime.Util.get_localized_text(guid)
+      if SkillUptime.Util.is_valid_name(name) then
+        SkillUptime.Util.logDebug(string.format("Item %s (ID %d): Resolved to '%s'", key, itemId, name))
+        SkillUptime.Items.name_cache[key] = name
+        return name
+      else
+        SkillUptime.Util.logDebug(string.format("Item %s (ID %d): Invalid name '%s', using key", key, itemId,
+          tostring(name)))
+      end
+    else
+      SkillUptime.Util.logDebug(string.format("Item %s (ID %d): Failed to get GUID", key, itemId))
+    end
+  else
+    SkillUptime.Util.logDebug("FN_GetItemNameRaw not available")
+  end
+
+  -- Fallback to key
+  SkillUptime.Items.name_cache[key] = key
+  return key
+end
+
 SkillUptime.Core.IsQuestFinishing = function()
   local mm = SkillUptime.Core.GetSingleton("app.MissionManager")
   if not mm then return false end
-  local isActive, isPlaying = false, false
-  if FN_IsActiveQuest then
-    local ok, v = pcall(function() return FN_IsActiveQuest:call(mm) end); if ok then
-      isActive = v and true or
-          false
-    end
+
+  local isActive = false
+  local okActive, vActive = pcall(function() return mm:get_IsActiveQuest() end)
+  if okActive then
+    isActive = vActive and true or false
   end
-  if FN_IsPlayingQuest then
-    local ok, v = pcall(function() return FN_IsPlayingQuest:call(mm) end); if ok then
-      isPlaying = v and true or
-          false
-    end
+
+  local isPlaying = false
+  local okPlaying, vPlaying = pcall(function() return mm:get_IsPlayingQuest() end)
+  if okPlaying then
+    isPlaying = vPlaying and true or false
   end
+
   return isActive and (not isPlaying)
 end
 
 SkillUptime.Core.IsInBattle = function()
   if SkillUptime.Core.IsQuestFinishing() then return false end
   local soundMgr = SkillUptime.Core.GetSingleton("app.SoundMusicManager")
-  local manager = nil
-  if soundMgr and FN_GetBattleMusic then
-    local ok, battleMgr = pcall(function() return FN_GetBattleMusic:call(soundMgr) end)
-    if ok and battleMgr then manager = battleMgr end
-  end
-  if FN_IsBattle and manager then
-    local ok2, res = pcall(function() return FN_IsBattle:call(manager) end)
-    if ok2 then return res and true or false end
-  end
+  if not soundMgr then return false end
+
+  -- Get BattleMusicManager directly using get_BattleMusic() method
+  local ok, battleMgr = pcall(function() return soundMgr:get_BattleMusic() end)
+  if not ok or not battleMgr then return false end
+
+  -- Check if battle music is playing
+  local ok2, isBattle = pcall(function() return battleMgr:get_IsBattle() end)
+  if ok2 and isBattle then return true end
+
   return false
 end
 
@@ -693,8 +850,7 @@ SkillUptime.Core.tick_battle = function()
     SkillUptime.Battle.start = now()
     for id, is_running in pairs(SkillUptime.Skills.running) do
       if is_running and (not SkillUptime.Skills.is_excluded_skill(id)) and SkillUptime.Skills.timing_starts[id] == nil then
-        SkillUptime.Skills.timing_starts[id] =
-            now()
+        SkillUptime.Skills.timing_starts[id] = now()
       end
     end
     SkillUptime.Util.logDebug("Battle started")
@@ -717,14 +873,21 @@ end
 SkillUptime.Flags.ensure_flag = function(flagId)
   local rec = SkillUptime.Flags.data[flagId]
   if not rec then
+    -- Try to get name from dynamic enum lookup first (these come from the game's enum)
+    local enumName = SkillUptime.Flags.names[flagId]
+    -- Fall back to hardcoded map if enum name not available
+    local flagName = enumName or FLAGS_NAME_MAP[flagId]
+    -- Final fallback to FLAG + ID
+    if not flagName then
+      flagName = "FLAG " .. tostring(flagId)
+    end
+
     rec = {
-      Name = (FLAGS_NAME_MAP and FLAGS_NAME_MAP[flagId]) or SkillUptime.Flags.names[flagId] or
-          ("FLAG " .. tostring(flagId)),
+      Name = flagName,
       Timer = 0,
       MaxTimer = 0,
       Activated = false,
-      LastSeen =
-          now()
+      LastSeen = now()
     }
     SkillUptime.Flags.data[flagId] = rec
   end
@@ -756,7 +919,7 @@ SkillUptime.Hooks.onSetStatusBuff = function(args)
 end
 
 SkillUptime.Core.tick_status_flags = function()
-  local t = now()
+  local t = SkillUptime.Core.now()
   if not SkillUptime.Flags.lastTick then
     SkillUptime.Flags.lastTick = t; return
   end
@@ -773,7 +936,7 @@ SkillUptime.Core.tick_status_flags = function()
 end
 
 SkillUptime.Skills.get_hunter_skill = function()
-  local pm = sdk.get_managed_singleton and sdk.get_managed_singleton("app.PlayerManager") or nil
+  local pm = SkillUptime.Core.GetSingleton("app.PlayerManager")
   if not pm then return nil end
   local info = pm:getMasterPlayer(); if not info then return nil end
   local chr = info:get_Character(); if not chr then return nil end
@@ -874,8 +1037,9 @@ end
 SkillUptime.Items.ensure_item = function(name)
   local rec = SkillUptime.Items.data[name]
   if not rec then
-    rec = { Name = SkillUptime.Items.Names[name] or name, Timer = 0, MaxTimer = 0, Activated = false }; SkillUptime.Items.data[name] =
-        rec
+    local displayName = SkillUptime.Items.resolve_name(name)
+    rec = { Name = displayName, Timer = 0, MaxTimer = 0, Activated = false }
+    SkillUptime.Items.data[name] = rec
   end
   return rec
 end
@@ -890,10 +1054,12 @@ end
 
 SkillUptime.Items.update_items_and_frenzy = function(skl, status)
   if not skl then return end
+  -- SkillUptime.Util.logDebug("ItemBuff : " .. tostring(status))
   local st = status
   if not st then
     local okSt, s = pcall(function() return skl:get_Status() end); if okSt then st = s end
   end
+
   if st and st._ItemBuff then
     local item = st._ItemBuff
     SkillUptime.Items.update_itembuff("Kairiki", item._Kairiki_Timer, item._Kairiki_MaxTime)
@@ -991,27 +1157,29 @@ SkillUptime.Weapons.update_weapon_states = function()
   recA.Activated = isArch; recA.Meter = gaugePct
 end
 
+-- ============================================================================
+-- Game Event Hooks
+-- ============================================================================
 SkillUptime.Hooks.onBeginSkillLog = function(args)
-  local skill_id = SkillUptime.Skills.extract_skill_id_from_args(args); if not skill_id then return end
+  local skill_id = SkillUptime.Skills.extract_skill_id_from_args(args); if not skill_id then
+    return
+  end
   if SkillUptime.Skills.is_excluded_skill(skill_id) then return end
   local name = SkillUptime.Skills.resolve_name(skill_id, 1)
   SkillUptime.Skills.running[skill_id] = true
   if SkillUptime.Battle.active and SkillUptime.Skills.timing_starts[skill_id] == nil then
-    SkillUptime.Skills.timing_starts[skill_id] =
-        now()
+    SkillUptime.Skills.timing_starts[skill_id] = SkillUptime.Core.now()
   end
   SkillUptime.Util.logDebug(string.format("Skill on:  ID=%d, Name=%s", skill_id, name))
 end
 
 SkillUptime.Hooks.onEndSkillLog = function(args)
   local skill_id = SkillUptime.Skills.extract_skill_id_from_args(args)
-  if not skill_id then
-    SkillUptime.Util.logDebug("endSkillLog: missing skill id"); return
-  end
+  if not skill_id then return end
   if SkillUptime.Skills.is_excluded_skill(skill_id) then return end
   local added = 0.0
   if SkillUptime.Skills.timing_starts[skill_id] then
-    added = now() - SkillUptime.Skills.timing_starts[skill_id]
+    added = SkillUptime.Core.now() - SkillUptime.Skills.timing_starts[skill_id]
     if added < 0 then added = 0 end
     SkillUptime.Skills.uptime[skill_id] = (SkillUptime.Skills.uptime[skill_id] or 0) + added
     SkillUptime.Skills.timing_starts[skill_id] = nil
@@ -1023,6 +1191,31 @@ SkillUptime.Hooks.onEndSkillLog = function(args)
   else
     SkillUptime.Util.logDebug(
       string.format("Skill off: ID=%d, Name=%s", skill_id, name))
+  end
+end
+
+-- Accumulate skills uptime using Status.SkillData Activated flags (robust across begin/end signature changes)
+SkillUptime.Core.accumulate_uptime_skills = function(in_battle, tnow)
+  local reg = SkillUptime.Status and SkillUptime.Status.SkillData or nil
+  if not reg then return end
+  for sid, rec in pairs(reg) do
+    if not SkillUptime.Skills.is_excluded_skill(sid) then
+      if in_battle then
+        if rec.Activated and (SkillUptime.Skills.timing_starts[sid] == nil) then
+          SkillUptime.Skills.timing_starts[sid] = tnow
+        elseif (not rec.Activated) and SkillUptime.Skills.timing_starts[sid] then
+          local seg = tnow - SkillUptime.Skills.timing_starts[sid]
+          if seg > 0 then SkillUptime.Skills.uptime[sid] = (SkillUptime.Skills.uptime[sid] or 0) + seg end
+          SkillUptime.Skills.timing_starts[sid] = nil
+        end
+      else
+        if SkillUptime.Skills.timing_starts[sid] then
+          local seg = tnow - SkillUptime.Skills.timing_starts[sid]
+          if seg > 0 then SkillUptime.Skills.uptime[sid] = (SkillUptime.Skills.uptime[sid] or 0) + seg end
+          SkillUptime.Skills.timing_starts[sid] = nil
+        end
+      end
+    end
   end
 end
 
@@ -1060,6 +1253,29 @@ end
 -- Count boss-target hits and attribute them to currently active skills
 SkillUptime.Hooks.onHunterHitPost = function(args)
   local hitInfo = sdk.to_managed_object(args[3]); if not hitInfo then return end
+
+  -- Only count hits from the current player
+  local okOwner, hitOwner = pcall(function() return hitInfo:getActualAttackOwner() end)
+  if not okOwner or not hitOwner then return end
+
+  -- Get the master player's character GameObject
+  local pm = SkillUptime.Core.GetSingleton("app.PlayerManager")
+  if not pm then return end
+  local okPlayer, playerInfo = pcall(function() return pm:getMasterPlayer() end)
+  if not okPlayer or not playerInfo then return end
+  local okChar, playerChar = pcall(function() return playerInfo:get_Character() end)
+  if not okChar or not playerChar then return end
+
+  -- Get the GameObject from playerChar (it should already be a GameObject)
+  local okPlayerGO, playerGO = pcall(function() return playerChar:get_GameObject() end)
+  if okPlayerGO and playerGO then
+    -- Compare GameObjects
+    if hitOwner ~= playerGO then return end
+  else
+    -- Fallback: compare directly if playerChar is already a GameObject
+    if hitOwner ~= playerChar then return end
+  end
+
   local damageData = hitInfo:get_DamageData(); if not damageData then return end
   if damageData:get_type_definition():get_name() ~= "cDamageParamEm" then return end
   local final = 0
@@ -1073,9 +1289,11 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   local isBoss = false
   local okB, vB = pcall(function() return ctx:get_IsBoss() end); if okB then isBoss = vB and true or false end
   if not isBoss then return end
+
   -- Count this hit
   SkillUptime.Hits.total = (SkillUptime.Hits.total or 0) + 1
-  SkillUptime.Util.logDebug(string.format("Monster hit credited: total=%d", SkillUptime.Hits.total))
+  SkillUptime.Util.logDebug(string.format("Player hit registered! Total hits: %d, Damage: %.0f", SkillUptime.Hits.total,
+    final))
 
   -- Per-move damage collection (only when strategy with moveDamage present is selected OR always accumulate
   -- so that switching strategies later still shows historical data).
@@ -1114,17 +1332,7 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
         local okName, nm = pcall(function() return SkillUptime.Moves.resolve_name(hitInfo) end)
         mv.names[atkIndex] = (okName and nm) or ("Atk " .. atkIndex)
       end
-      if config and config.debug then
-        local nm = mv.names[atkIndex]
-        local colIdDbg = mv.colIds[atkIndex]
-        local wpTypeDbg = mv.wpTypes[atkIndex]
-        local maxHit = mv.maxHit[atkIndex]
-        SkillUptime.Util.logDebug(string.format(
-          "Hit: move=%s dmg=%.0f max=%.0f atkIdx=%s colID=%s wpType=%s totalHits=%d",
-          tostring(nm), final, maxHit or final, atkIndex, tostring(colIdDbg), tostring(wpTypeDbg),
-          SkillUptime.Hits.total or 0
-        ))
-      end
+      -- no extra per-hit debug logging
     end
   end
 
@@ -1160,205 +1368,194 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   end
 end
 
+-- Hook for HunterSkillUpdater.lateUpdate to properly sync item buff values
+-- This is necessary because _ItemBuff values can desync if not read at the right time in the update cycle
+SkillUptime.Hooks.onSkillUpdaterLateUpdate = function(args)
+  local this = sdk.to_managed_object(args[2])
+  if not this then return end
+
+  local skill = this._HunterSkill
+  if not skill then return end
+
+  local status = skill.Status
+  if not status then return end
+
+  -- Only update for master player
+  local okMaster, isMaster = pcall(function() return status:get_IsMaster() end)
+  if not okMaster or not isMaster then return end
+
+  -- Update item buffs with properly synced values
+  SkillUptime.Items.update_items_and_frenzy(skill, status)
+end
+
+-- ============================================================================
+-- UI Rendering
+-- ============================================================================
 SkillUptime.UI.draw = function()
-  local openFlag = { true }
-  -- Always call end_window() after begin_window(), even if collapsed
+  -- Title and flags
   local __as = SkillUptime.Strategy.get_active()
   local __title = "Skill Uptime Tracker: " .. ((__as and __as.label) or "")
-  local window_open = imgui.begin_window(__title, openFlag, 64)
-  if window_open then
-    -- Push default font if available so this window matches REFramework UI settings
-    local pushed_font = false
-    local font = SkillUptime.UI.ensure_default_font()
-    if font then
-      imgui.push_font(font); pushed_font = true
+  local window_open = imgui.begin_window(__title, true, 64)
+  if not window_open then
+    SkillUptime.UI.open = false; config.openWindow = false; SkillUptime.Config.save()
+    imgui.end_window()
+    return
+  end
+
+  -- Font and common locals
+  local pushed_font = false
+  local font = SkillUptime.UI.ensure_default_font()
+  if font then
+    imgui.push_font(font); pushed_font = true
+  end
+
+  local strategy = SkillUptime.Strategy.get_active()
+  local elapsed = SkillUptime.Core.get_battle_elapsed()
+  local tableFlags = imgui.TableFlags.Borders
+  local epsilon = SkillUptime.Const.EPSILON or 0.0005
+
+  -- Battle timer header for "In combat" strategy
+  if strategy.showBattleHeader then
+    local timerText = "In combat: " .. SkillUptime.Util.fmt_mss_hh(elapsed)
+    if SkillUptime.Battle.active then
+      imgui.text(timerText)
+      imgui.same_line()
+      imgui.text_colored("(active)", SkillUptime.Const.COLOR_GREEN)
+    else
+      imgui.text(timerText)
+      imgui.same_line()
+      imgui.text_colored("(inactive)", SkillUptime.Const.COLOR_RED)
     end
-    local strategy = SkillUptime.Strategy.get_active()
-    local elapsed = SkillUptime.Core.get_battle_elapsed() -- still used for skill uptime percentages
+    imgui.spacing()
+  end
 
-    local tableFlags = imgui.TableFlags.Borders
-    local epsilon = 0.0005
-
-    -- Skills table
-    if SkillUptime.UI.tables.Skills then
-      local id_set = {}
-      local useHits = (strategy.useHitsView == true)
-      local showMoveDamage = (strategy.moveDamage == true)
-      if showMoveDamage then
-        -- Render per-move damage distribution instead of skill list
-        local mv = SkillUptime.Moves
-        local totalDmg = (mv and mv.total) or 0
-        local moveCount = 0; if mv and mv.damage then for _ in pairs(mv.damage) do moveCount = moveCount + 1 end end
-        imgui.text_colored("> Move Damage (" .. tostring(moveCount) .. ")", SkillUptime.Const.COLOR_BLUE)
-        if totalDmg > 0 then
-          if imgui.begin_table("move_damage_table", 8, tableFlags) then
-            imgui.table_setup_column("#")                  -- 0
-            imgui.table_setup_column("Weapon")             -- 1
-            imgui.table_setup_column("Move Name")          -- 2
-            imgui.table_setup_column("Hits")               -- 3
-            imgui.table_setup_column("Hit %")              -- 4
-            imgui.table_setup_column("Total Damage")       -- 5
-            imgui.table_setup_column("Highest Single Hit") -- 6
-            imgui.table_setup_column("Dmg %")              -- 7
-            imgui.table_headers_row()
-            -- Build sortable list
-            local rows = {}
-            for key, dmg in pairs(mv.damage) do
-              table.insert(rows, {
-                key = key,
-                dmg = dmg,
-                hits = mv.hits[key] or 0,
-                name = mv.names[key] or key,
-                wtype = mv.wpTypes[key],
-                colId = mv.colIds[key],
-                maxHit = mv.maxHit[key]
-              })
-            end
-            table.sort(rows, function(a, b) return a.dmg > b.dmg end)
-            local totalHits = SkillUptime.Hits.total or 0
-            for _, r in ipairs(rows) do
-              imgui.table_next_row()
-              -- Column 0: Compact ID (weaponType-collisionId)
-              local compactId = nil
-              if r.wtype ~= nil and r.colId ~= nil then
-                compactId = string.format("%d-%d", r.wtype, r.colId)
-              elseif r.wtype ~= nil then
-                compactId = string.format("%d-?", r.wtype)
-              elseif r.colId ~= nil then
-                compactId = string.format("?- %d", r.colId)
-              end
-              imgui.table_set_column_index(0); imgui.text(compactId or tostring(r.key))
-              -- Column 1: Weapon (short code)
-              local wname = ""; if r.wtype ~= nil then
-                local wmap = SkillUptime.Moves.wmap
-                wname = (wmap and wmap[r.wtype]) or ("#" .. tostring(r.wtype))
-              end
-              imgui.table_set_column_index(1); imgui.text(wname)
-              -- Column 2: Resolved Name
-              imgui.table_set_column_index(2); imgui.text(r.name)
-              -- Column 3: Hits (moveHits/totalHits)
-              local hitPct = (totalHits > 0) and (r.hits / totalHits * 100.0) or 0.0
-              imgui.table_set_column_index(3); if totalHits > 0 then
-                imgui.text(string.format("%d/%d", r.hits, totalHits))
-              else
-                imgui.text(tostring(r.hits))
-              end
-              -- Column 4: Hit %
-              imgui.table_set_column_index(4); imgui.text(string.format("%.1f%%", hitPct))
-              -- Column 5: Total Damage (raw)
-              imgui.table_set_column_index(5); imgui.text(string.format("%.0f", r.dmg))
-              -- Column 6: Highest Single Hit
-              imgui.table_set_column_index(6); imgui.text(r.maxHit and string.format("%.0f", r.maxHit) or "-")
-              -- Column 7: Dmg % of total move damage
-              imgui.table_set_column_index(7); imgui.text(string.format("%.1f%%", (r.dmg / totalDmg) * 100.0))
-            end
-            imgui.end_table()
-            imgui.text(string.format("Total Damage: %.0f", totalDmg))
-          end
+  -- Skills
+  if SkillUptime.UI.tables.Skills then
+    local id_set = {}
+    local useHits = (strategy.useHitsView == true)
+    if useHits then
+      for id, cnt in pairs(SkillUptime.Skills.hits_up or {}) do if (cnt or 0) > 0 and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+      for id, rec in pairs(SkillUptime.Status.SkillData or {}) do if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+      for id, on in pairs(SkillUptime.Skills.running or {}) do if on and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+    else
+      for id, sec in pairs(SkillUptime.Skills.uptime) do if (sec or 0) > epsilon and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+      for id, start_t in pairs(SkillUptime.Skills.timing_starts) do
+        if start_t and (not SkillUptime.Skills.is_excluded_skill(id)) then
+          local live = SkillUptime.Core.now() - start_t; if live and live > epsilon then id_set[id] = true end
         end
-        -- Skip normal skills rendering when moveDamage active
-      else
+      end
+    end
+    local ids = {}; for id, _ in pairs(id_set) do table.insert(ids, id) end; table.sort(ids)
+    imgui.text_colored("> Skills (" .. #ids .. ")", SkillUptime.Const.COLOR_BLUE)
+    if #ids > 0 then
+      local colCount = 1
+      if SkillUptime.UI.columns.Primary then colCount = colCount + 1 end
+      if SkillUptime.UI.columns.Percent then colCount = colCount + 1 end
+      if SkillUptime.UI.columns.Active then colCount = colCount + 1 end
+      if SkillUptime.UI.columns.State then colCount = colCount + 1 end
+      if imgui.begin_table("skill_uptime_table", colCount, tableFlags) then
+        imgui.table_setup_column("Name")
         if useHits then
-          -- Include skills with any hit credit or currently active
-          for id, cnt in pairs(SkillUptime.Skills.hits_up or {}) do if (cnt or 0) > 0 and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
-          for id, rec in pairs(SkillUptime.Status.SkillData or {}) do if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
-          for id, on in pairs(SkillUptime.Skills.running or {}) do if on and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Hits (up/total)") end
+          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Hit Uptime (%)") end
         else
-          for id, sec in pairs(SkillUptime.Skills.uptime) do if (sec or 0) > epsilon and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
-          for id, start_t in pairs(SkillUptime.Skills.timing_starts) do
-            if start_t and (not SkillUptime.Skills.is_excluded_skill(id)) then
-              local live = SkillUptime.Core.now() - start_t; if live and live > epsilon then id_set[id] = true end
-            end
-          end
+          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Uptime") end
+          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Uptime (%)") end
         end
-        local ids = {}; for id, _ in pairs(id_set) do table.insert(ids, id) end; table.sort(ids)
-        imgui.text_colored("> Skills (" .. #ids .. ")", SkillUptime.Const.COLOR_BLUE)
-        local colCount = 1
-        if SkillUptime.UI.columns.Primary then colCount = colCount + 1 end
-        if SkillUptime.UI.columns.Percent then colCount = colCount + 1 end
-        if SkillUptime.UI.columns.Active then colCount = colCount + 1 end
-        if SkillUptime.UI.columns.State then colCount = colCount + 1 end
-        if imgui.begin_table("skill_uptime_table", colCount, tableFlags) then
-          imgui.table_setup_column("Name")
-          if useHits then
-            if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Hits (up/total)") end
-            if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Hit Uptime (%)") end
-          else
-            if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Uptime") end
-            if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Uptime (%)") end
+        if SkillUptime.UI.columns.Active then imgui.table_setup_column("Active Time") end
+        if SkillUptime.UI.columns.State then imgui.table_setup_column("State") end
+        imgui.table_headers_row()
+        for _, id in ipairs(ids) do
+          local base = (not SkillUptime.Skills.is_excluded_skill(id)) and (SkillUptime.Skills.uptime[id] or 0.0) or 0.0
+          local live = 0.0
+          if SkillUptime.Skills.timing_starts[id] and (not SkillUptime.Skills.is_excluded_skill(id)) then
+            live = SkillUptime.Core.now() - SkillUptime.Skills.timing_starts[id]; if live < 0 then live = 0 end
           end
-          if SkillUptime.UI.columns.Active then imgui.table_setup_column("Active Time") end
-          if SkillUptime.UI.columns.State then imgui.table_setup_column("State") end
-          imgui.table_headers_row()
-          for _, id in ipairs(ids) do
-            local base = (not SkillUptime.Skills.is_excluded_skill(id)) and (SkillUptime.Skills.uptime[id] or 0.0) or 0.0
-            local live = 0.0
-            if SkillUptime.Skills.timing_starts[id] and (not SkillUptime.Skills.is_excluded_skill(id)) then
-              live = SkillUptime.Core.now() - SkillUptime.Skills.timing_starts[id]; if live < 0 then live = 0 end
-            end
-            local total = base + live
-            local display = true
-            if (not useHits) and (total <= epsilon) then display = false end
-            if display then
-              local name = SkillUptime.Skills.name_cache[id] or SkillUptime.Skills.resolve_name(id, 1); SkillUptime.Skills.name_cache[id] =
-                  name
-              imgui.table_next_row()
-              local col = 0
-              imgui.table_set_column_index(col); imgui.text(name); col = col + 1
-              if useHits then
-                local up = SkillUptime.Skills.hits_up[id] or 0
-                local totHits = SkillUptime.Hits.total or 0
-                local hitPct = (totHits > 0) and (up / totHits * 100.0) or 0.0
-                if SkillUptime.UI.columns.Primary then
-                  imgui.table_set_column_index(col);
-                  if totHits > 0 then imgui.text(string.format("%d/%d", up, totHits)) else imgui.text("—") end
-                  col = col + 1
-                end
-                if SkillUptime.UI.columns.Percent then
-                  imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
-                end
-              else
-                local pct = (elapsed > 0) and (total / elapsed * 100.0) or 0.0
-                if SkillUptime.UI.columns.Primary then
-                  imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_mss_hh(total)); col = col + 1
-                end
-                if SkillUptime.UI.columns.Percent then
-                  imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", pct)); col = col + 1
-                end
-              end
-              local s = SkillUptime.Status.SkillData[id]
-              if SkillUptime.UI.columns.Active then
-                imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_time_pair(s and s.Timer,
-                  s and s.MaxTimer)); col = col +
-                    1
-              end
-              if SkillUptime.UI.columns.State then
+          local total = base + live
+          local display = true
+          if (not useHits) and (total <= epsilon) then display = false end
+          if display then
+            local name = SkillUptime.Skills.name_cache[id] or SkillUptime.Skills.resolve_name(id, 1); SkillUptime.Skills.name_cache[id] =
+                name
+            imgui.table_next_row()
+            local col = 0
+            imgui.table_set_column_index(col); imgui.text(name); col = col + 1
+            if useHits then
+              local up = SkillUptime.Skills.hits_up[id] or 0
+              local totHits = SkillUptime.Hits.total or 0
+              local hitPct = (totHits > 0) and (up / totHits * 100.0) or 0.0
+              if SkillUptime.UI.columns.Primary then
                 imgui.table_set_column_index(col);
-                local is_active = (s and s.Activated) and true or false
-                if is_active then
-                  imgui.text_colored("active", SkillUptime.Const.COLOR_GREEN)
-                else
-                  imgui.text_colored(
-                    "inactive", SkillUptime.Const.COLOR_RED)
-                end
+                if totHits > 0 then imgui.text(string.format("%d/%d", up, totHits)) else imgui.text("—") end
                 col = col + 1
               end
+              if SkillUptime.UI.columns.Percent then
+                imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
+              end
+            else
+              local pct = (elapsed > 0) and (total / elapsed * 100.0) or 0.0
+              if SkillUptime.UI.columns.Primary then
+                imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_mss_hh(total)); col = col + 1
+              end
+              if SkillUptime.UI.columns.Percent then
+                imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", pct)); col = col + 1
+              end
+            end
+            local s = SkillUptime.Status.SkillData[id]
+            if SkillUptime.UI.columns.Active then
+              imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_time_pair(s and s.Timer,
+                s and s.MaxTimer)); col =
+                  col + 1
+            end
+            if SkillUptime.UI.columns.State then
+              imgui.table_set_column_index(col); if s and s.Activated then
+                imgui.text_colored("active", SkillUptime.Const.COLOR_GREEN)
+              else
+                imgui.text_colored("inactive", SkillUptime.Const.COLOR_RED)
+              end
+              col = col + 1
             end
           end
-          imgui.end_table()
         end
-      end -- end not showMoveDamage
+        imgui.end_table()
+      end
     end
-    -- Item Buffs table
-    if SkillUptime.UI.tables.Items then
-      local itemRows = SkillUptime.Core.build_rows(SkillUptime.Items.data, SkillUptime.Items.uptime,
-        SkillUptime.Items.timing_starts,
-        epsilon,
-        function(key, rec) return rec.Name or tostring(key) end)
-      table.sort(itemRows, function(a, b) return a.name < b.name end)
-      imgui.text_colored("> Item Buffs (" .. #itemRows .. ")", SkillUptime.Const.COLOR_BLUE)
-      local strategy = SkillUptime.Strategy.get_active()
-      local useHits = (strategy.useHitsView == true)
+  end
+
+  -- Items
+  if SkillUptime.UI.tables.Items then
+    -- Build rows for items that have been used (have uptime, hits, or currently active)
+    local itemRows = {}
+    local useHits = (strategy.useHitsView == true)
+
+    for key, rec in pairs(SkillUptime.Items.data or {}) do
+      local base = SkillUptime.Items.uptime[key] or 0.0
+      local live = 0.0
+      -- Calculate live time if item is currently being timed
+      if SkillUptime.Items.timing_starts[key] then
+        live = SkillUptime.Core.now() - SkillUptime.Items.timing_starts[key]
+        if live < 0 then live = 0 end
+      end
+      local total = base + live
+      local hits = SkillUptime.Items.hits_up[key] or 0
+      local active = rec.Activated and true or false
+
+      -- Show item if it has uptime, hits, or is currently active
+      if total > epsilon or hits > 0 or active then
+        table.insert(itemRows, {
+          key = key,
+          name = rec.Name or tostring(key),
+          total = total,
+          rec = rec,
+          active = active
+        })
+      end
+    end
+
+    table.sort(itemRows, function(a, b) return a.name < b.name end)
+    imgui.text_colored("> Item Buffs (" .. #itemRows .. ")", SkillUptime.Const.COLOR_BLUE)
+
+    if #itemRows > 0 then
       local colCount = 1
       if SkillUptime.UI.columns.Primary then colCount = colCount + 1 end
       if SkillUptime.UI.columns.Percent then colCount = colCount + 1 end
@@ -1407,100 +1604,28 @@ SkillUptime.UI.draw = function()
           end
           if SkillUptime.UI.columns.State then
             imgui.table_set_column_index(col); if row.active then
-              imgui.text_colored("active", SkillUptime.Const.COLOR_GREEN)
+              imgui.text_colored("active",
+                SkillUptime.Const.COLOR_GREEN)
             else
               imgui.text_colored("inactive", SkillUptime.Const.COLOR_RED)
-            end
-            col = col + 1
+            end; col =
+                col + 1
           end
         end
         imgui.end_table()
       end
     end
+  end
 
-    imgui.spacing()
-    -- Weapon States (Dual Blades)
-    if SkillUptime.UI.tables.Weapons then
-      local rows = SkillUptime.Core.build_rows(SkillUptime.Weapons.data, SkillUptime.Weapons.uptime,
-        SkillUptime.Weapons.timing_starts,
-        epsilon,
-        function(key, rec) return rec.Name or tostring(key) end)
-      table.sort(rows, function(a, b) return a.name < b.name end)
-      imgui.text_colored("> Weapon States (" .. #rows .. ")", SkillUptime.Const.COLOR_BLUE)
-      local strategy = SkillUptime.Strategy.get_active()
-      local useHits = (strategy.useHitsView == true)
-      local colCount2 = 1
-      if SkillUptime.UI.columns.Primary then colCount2 = colCount2 + 1 end
-      if SkillUptime.UI.columns.Percent then colCount2 = colCount2 + 1 end
-      if SkillUptime.UI.columns.Active then colCount2 = colCount2 + 1 end
-      if SkillUptime.UI.columns.State then colCount2 = colCount2 + 1 end
-      if imgui.begin_table("weapon_states_table", colCount2, tableFlags) then
-        imgui.table_setup_column("Name")
-        if useHits then
-          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Hits (up/total)") end
-          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Hit Uptime (%)") end
-        else
-          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Uptime") end
-          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Uptime (%)") end
-        end
-        if SkillUptime.UI.columns.Active then imgui.table_setup_column(useHits and "Active Time" or "Active Meter") end
-        if SkillUptime.UI.columns.State then imgui.table_setup_column("State") end
-        imgui.table_headers_row()
-        for _, row in ipairs(rows) do
-          imgui.table_next_row()
-          local col = 0
-          imgui.table_set_column_index(col); imgui.text(row.name); col = col + 1
-          if useHits then
-            local up = SkillUptime.Weapons.hits_up[row.key] or 0
-            local totHits = SkillUptime.Hits.total or 0
-            local hitPct = (totHits > 0) and (up / totHits * 100.0) or 0.0
-            if SkillUptime.UI.columns.Primary then
-              imgui.table_set_column_index(col);
-              if totHits > 0 then imgui.text(string.format("%d/%d", up, totHits)) else imgui.text("—") end
-              col = col + 1
-            end
-            if SkillUptime.UI.columns.Percent then
-              imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
-            end
-            if SkillUptime.UI.columns.Active then
-              imgui.table_set_column_index(col); imgui.text("—"); col = col + 1
-            end
-          else
-            local pct = (elapsed > 0) and (row.total / elapsed * 100.0) or 0.0
-            local meterStr = SkillUptime.Util.fmt_pct_label(row.rec and row.rec.MeterLabel, row.rec and row.rec.Meter)
-            if SkillUptime.UI.columns.Primary then
-              imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_mss_hh(row.total)); col = col + 1
-            end
-            if SkillUptime.UI.columns.Percent then
-              imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", pct)); col = col + 1
-            end
-            if SkillUptime.UI.columns.Active then
-              imgui.table_set_column_index(col); imgui.text(meterStr); col = col + 1
-            end
-          end
-          if SkillUptime.UI.columns.State then
-            imgui.table_set_column_index(col); if row.active then
-              imgui.text_colored("active", SkillUptime.Const.COLOR_GREEN)
-            else
-              imgui.text_colored("inactive", SkillUptime.Const.COLOR_RED)
-            end
-            col = col + 1
-          end
-        end
-        imgui.end_table()
-      end
-    end
+  imgui.spacing()
 
-    imgui.spacing()
-    -- Status Flags table
-    if SkillUptime.UI.tables.Flags then
-      local flagRows = SkillUptime.Core.build_rows(SkillUptime.Flags.data, SkillUptime.Flags.uptime,
-        SkillUptime.Flags.timing_starts,
-        epsilon,
-        function(fid, rec) return rec.Name or ("FLAG " .. tostring(fid)) end)
-      table.sort(flagRows, function(a, b) return a.key < b.key end)
-      imgui.text_colored("> Status Flags (" .. #flagRows .. ")", SkillUptime.Const.COLOR_BLUE)
-      local strategy = SkillUptime.Strategy.get_active()
+  -- Flags
+  if SkillUptime.UI.tables.Flags then
+    local flagRows = SkillUptime.Core.build_rows(SkillUptime.Flags.data, SkillUptime.Flags.uptime,
+      SkillUptime.Flags.timing_starts, epsilon, function(fid, rec) return rec.Name or ("FLAG " .. tostring(fid)) end)
+    table.sort(flagRows, function(a, b) return a.key < b.key end)
+    imgui.text_colored("> Status Flags (" .. #flagRows .. ")", SkillUptime.Const.COLOR_BLUE)
+    if #flagRows > 0 then
       local useHits = (strategy.useHitsView == true)
       local colCount3 = 1
       if SkillUptime.UI.columns.Primary then colCount3 = colCount3 + 1 end
@@ -1528,9 +1653,11 @@ SkillUptime.UI.draw = function()
             local totHits = SkillUptime.Hits.total or 0
             local hitPct = (totHits > 0) and (up / totHits * 100.0) or 0.0
             if SkillUptime.UI.columns.Primary then
-              imgui.table_set_column_index(col);
-              if totHits > 0 then imgui.text(string.format("%d/%d", up, totHits)) else imgui.text("—") end
-              col = col + 1
+              imgui.table_set_column_index(col); if totHits > 0 then
+                imgui.text(string.format("%d/%d", up, totHits))
+              else
+                imgui.text("—")
+              end; col = col + 1
             end
             if SkillUptime.UI.columns.Percent then
               imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
@@ -1550,34 +1677,217 @@ SkillUptime.UI.draw = function()
           end
           if SkillUptime.UI.columns.State then
             imgui.table_set_column_index(col); if row.active then
-              imgui.text_colored("active", SkillUptime.Const.COLOR_GREEN)
+              imgui.text_colored("active",
+                SkillUptime.Const.COLOR_GREEN)
             else
               imgui.text_colored("inactive", SkillUptime.Const.COLOR_RED)
-            end
-            col = col + 1
+            end; col =
+                col + 1
           end
         end
         imgui.end_table()
       end
     end
-    -- Final footer controls at the bottom of the last table
-    if not config.hideButtons then
-      imgui.spacing()
-      if imgui.button("Reset Uptime") then
-        SkillUptime.Hooks.reset_all(); SkillUptime.Config.save()
+  end
+
+  -- Weapons
+  if SkillUptime.UI.tables.Weapons then
+    local rows = SkillUptime.Core.build_rows(SkillUptime.Weapons.data, SkillUptime.Weapons.uptime,
+      SkillUptime.Weapons.timing_starts, epsilon, function(key, rec) return rec.Name or tostring(key) end)
+    table.sort(rows, function(a, b) return a.name < b.name end)
+    imgui.text_colored("> Weapon States (" .. #rows .. ")", SkillUptime.Const.COLOR_BLUE)
+    if #rows > 0 then
+      local useHits = (strategy.useHitsView == true)
+      local colCount2 = 1
+      if SkillUptime.UI.columns.Primary then colCount2 = colCount2 + 1 end
+      if SkillUptime.UI.columns.Percent then colCount2 = colCount2 + 1 end
+      if SkillUptime.UI.columns.Active then colCount2 = colCount2 + 1 end
+      if SkillUptime.UI.columns.State then colCount2 = colCount2 + 1 end
+      if imgui.begin_table("weapon_states_table", colCount2, tableFlags) then
+        imgui.table_setup_column("Name")
+        if useHits then
+          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Hits (up/total)") end
+          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Hit Uptime (%)") end
+        else
+          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Uptime") end
+          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Uptime (%)") end
+        end
+        if SkillUptime.UI.columns.Active then imgui.table_setup_column(useHits and "Active Time" or "Active Meter") end
+        if SkillUptime.UI.columns.State then imgui.table_setup_column("State") end
+        imgui.table_headers_row()
+        for _, row in ipairs(rows) do
+          imgui.table_next_row()
+          local col = 0
+          imgui.table_set_column_index(col); imgui.text(row.name); col = col + 1
+          if useHits then
+            local up = SkillUptime.Weapons.hits_up[row.key] or 0
+            local totHits = SkillUptime.Hits.total or 0
+            local hitPct = (totHits > 0) and (up / totHits * 100.0) or 0.0
+            if SkillUptime.UI.columns.Primary then
+              imgui.table_set_column_index(col); if totHits > 0 then
+                imgui.text(string.format("%d/%d", up, totHits))
+              else
+                imgui.text("—")
+              end; col = col + 1
+            end
+            if SkillUptime.UI.columns.Percent then
+              imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
+            end
+            if SkillUptime.UI.columns.Active then
+              imgui.table_set_column_index(col); imgui.text("—"); col = col + 1
+            end
+          else
+            local pct = (elapsed > 0) and (row.total / elapsed * 100.0) or 0.0
+            local meterStr = SkillUptime.Util.fmt_pct_label(row.rec and row.rec.MeterLabel, row.rec and row.rec.Meter)
+            if SkillUptime.UI.columns.Primary then
+              imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_mss_hh(row.total)); col = col + 1
+            end
+            if SkillUptime.UI.columns.Percent then
+              imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", pct)); col = col + 1
+            end
+            if SkillUptime.UI.columns.Active then
+              imgui.table_set_column_index(col); imgui.text(meterStr); col = col + 1
+            end
+          end
+          if SkillUptime.UI.columns.State then
+            imgui.table_set_column_index(col); if row.active then
+              imgui.text_colored("active",
+                SkillUptime.Const.COLOR_GREEN)
+            else
+              imgui.text_colored("inactive", SkillUptime.Const.COLOR_RED)
+            end; col =
+                col + 1
+          end
+        end
+        imgui.end_table()
       end
-      imgui.same_line()
-      if imgui.button("Close Window") then
-        SkillUptime.UI.open = false; config.openWindow = false; SkillUptime.Config.save()
-      end
-      imgui.spacing()
     end
-    if pushed_font then imgui.pop_font() end
-    imgui.end_window()
   end
-  if not openFlag[1] then
-    SkillUptime.UI.open = false; config.openWindow = false; SkillUptime.Config.save()
+
+
+  -- Move Damage
+  if SkillUptime.UI.tables.MoveDamage then
+    local mv = SkillUptime.Moves
+    local totalDmg = (mv and mv.total) or 0
+    local moveCount = 0
+    if mv and mv.damage then
+      for _ in pairs(mv.damage) do moveCount = moveCount + 1 end
+    end
+    imgui.text_colored("> Move Damage (" .. tostring(moveCount) .. ")", SkillUptime.Const.COLOR_BLUE)
+
+    if moveCount > 0 then
+      if imgui.begin_table("move_damage_table", 7, tableFlags) then
+        imgui.table_setup_column("Weapon")
+        imgui.table_setup_column("Move Name")
+        imgui.table_setup_column("Hits")
+        imgui.table_setup_column("Hit %")
+        imgui.table_setup_column("Total Damage")
+        imgui.table_setup_column("Highest Single Hit")
+        imgui.table_setup_column("Dmg %")
+        imgui.table_headers_row()
+
+        -- Group moves by weapon + move name
+        local grouped = {}
+        for key, dmg in pairs(mv.damage) do
+          local wtype = mv.wpTypes[key]
+          local moveName = mv.names[key] or key
+
+          -- Get weapon name
+          local wname = ""
+          if wtype ~= nil then
+            local wmap = SkillUptime.Moves.wmap
+            wname = (wmap and wmap[wtype]) or ("#" .. tostring(wtype))
+          end
+
+          -- Create group key from weapon + move name
+          local groupKey = wname .. "|" .. moveName
+
+          if not grouped[groupKey] then
+            grouped[groupKey] = {
+              wname = wname,
+              moveName = moveName,
+              dmg = 0,
+              hits = 0,
+              maxHit = 0
+            }
+          end
+
+          -- Aggregate data
+          grouped[groupKey].dmg = grouped[groupKey].dmg + dmg
+          grouped[groupKey].hits = grouped[groupKey].hits + (mv.hits[key] or 0)
+          local thisMaxHit = mv.maxHit[key] or 0
+          if thisMaxHit > grouped[groupKey].maxHit then
+            grouped[groupKey].maxHit = thisMaxHit
+          end
+        end
+
+        -- Convert to array and sort by damage
+        local rows = {}
+        for _, group in pairs(grouped) do
+          table.insert(rows, group)
+        end
+        table.sort(rows, function(a, b) return a.dmg > b.dmg end)
+
+        local totalHits = SkillUptime.Hits.total or 0
+        for _, r in ipairs(rows) do
+          imgui.table_next_row()
+
+          -- Weapon name column
+          imgui.table_set_column_index(0)
+          imgui.text(r.wname)
+
+          -- Move name column
+          imgui.table_set_column_index(1)
+          imgui.text(r.moveName)
+
+          -- Hits column
+          local hitPct = (totalHits > 0) and (r.hits / totalHits * 100.0) or 0.0
+          imgui.table_set_column_index(2)
+          if totalHits > 0 then
+            imgui.text(string.format("%d/%d", r.hits, totalHits))
+          else
+            imgui.text(tostring(r.hits))
+          end
+
+          -- Hit % column
+          imgui.table_set_column_index(3)
+          imgui.text(string.format("%.1f%%", hitPct))
+
+          -- Total Damage column
+          imgui.table_set_column_index(4)
+          imgui.text(string.format("%.0f", r.dmg))
+
+          -- Highest Single Hit column
+          imgui.table_set_column_index(5)
+          imgui.text(r.maxHit > 0 and string.format("%.0f", r.maxHit) or "-")
+
+          -- Dmg % column
+          imgui.table_set_column_index(6)
+          imgui.text(string.format("%.1f%%", (r.dmg / totalDmg) * 100.0))
+        end
+        imgui.end_table()
+      end
+
+      -- Total damage footer
+      if totalDmg > 0 then
+        imgui.text(string.format("Total Damage: %.0f", totalDmg))
+      end
+    end
   end
+
+  imgui.spacing()
+
+  -- Footer buttons
+  if not config.hideButtons then
+    imgui.spacing()
+    if imgui.button("Reset Uptime") then
+      SkillUptime.Hooks.reset_all(); SkillUptime.Config.save()
+    end
+    imgui.spacing()
+  end
+
+  if pushed_font then imgui.pop_font() end
+  imgui.end_window()
 end
 
 -- UI entry
@@ -1600,40 +1910,33 @@ re.on_draw_ui(function()
     if changed then
       config.strategyIndex = SkillUptime.Strategy.index; SkillUptime.Config.save()
     end
-    -- (Currently only one option; reserved for future strategies.)
+    -- (Currently only two options; reserved for future strategies.)
     local toggled
-    local activeStrategy = SkillUptime.Strategy.get_active()
-    local moveDamageActive = activeStrategy and activeStrategy.moveDamage == true
-    -- Only show the other table toggles if NOT in Move Damage strategy
-    if not moveDamageActive then
-      toggled, SkillUptime.UI.tables.Skills = imgui.checkbox("Skills", SkillUptime.UI.tables.Skills)
-      if toggled then
-        config.show.skills = SkillUptime.UI.tables.Skills; SkillUptime.Config.save()
-      end
-      -- Direct toggles with (experimental) tag
-      toggled, SkillUptime.UI.tables.Items = imgui.checkbox("Item Buffs", SkillUptime.UI.tables.Items)
-      if toggled then
-        config.show.items = SkillUptime.UI.tables.Items; SkillUptime.Config.save()
-      end
-      imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
-      toggled, SkillUptime.UI.tables.Weapons = imgui.checkbox("Weapon States (only DBs atm)",
-        SkillUptime.UI.tables.Weapons)
-      if toggled then
-        config.show.weapons = SkillUptime.UI.tables.Weapons; SkillUptime.Config.save()
-      end
-      imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
-      toggled, SkillUptime.UI.tables.Flags = imgui.checkbox("Status Flags", SkillUptime.UI.tables.Flags)
-      if toggled then
-        config.show.flags = SkillUptime.UI.tables.Flags; SkillUptime.Config.save()
-      end
-      imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
-    else
-      -- When hidden due to Move Damage strategy, force-hide tables to avoid stale UI states
-      SkillUptime.UI.tables.Skills = false
-      SkillUptime.UI.tables.Items = false
-      SkillUptime.UI.tables.Weapons = false
-      SkillUptime.UI.tables.Flags = false
+    toggled, SkillUptime.UI.tables.Skills = imgui.checkbox("Skills", SkillUptime.UI.tables.Skills)
+    if toggled then
+      config.show.skills = SkillUptime.UI.tables.Skills; SkillUptime.Config.save()
     end
+    -- Direct toggles with (experimental) tag
+    toggled, SkillUptime.UI.tables.Items = imgui.checkbox("Item Buffs", SkillUptime.UI.tables.Items)
+    if toggled then
+      config.show.items = SkillUptime.UI.tables.Items; SkillUptime.Config.save()
+    end
+    toggled, SkillUptime.UI.tables.Flags = imgui.checkbox("Status Flags", SkillUptime.UI.tables.Flags)
+    if toggled then
+      config.show.flags = SkillUptime.UI.tables.Flags; SkillUptime.Config.save()
+    end
+    imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
+    toggled, SkillUptime.UI.tables.Weapons = imgui.checkbox("Weapon States (only DBs atm)",
+      SkillUptime.UI.tables.Weapons)
+    if toggled then
+      config.show.weapons = SkillUptime.UI.tables.Weapons; SkillUptime.Config.save()
+    end
+    imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
+    toggled, SkillUptime.UI.tables.MoveDamage = imgui.checkbox("Move Damage", SkillUptime.UI.tables.MoveDamage)
+    if toggled then
+      config.show.movedamage = SkillUptime.UI.tables.MoveDamage; SkillUptime.Config.save()
+    end
+    imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
     -- Display Settings
     if imgui.tree_node("Display Settings") then
       local c
@@ -1653,10 +1956,11 @@ re.on_draw_ui(function()
       if c then
         config.columns.state = SkillUptime.UI.columns.State; SkillUptime.Config.save()
       end
-      local hbChanged, hb = imgui.checkbox("Hide Window Buttons (Reset/Close)", config.hideButtons == true)
+      local hbChanged, hb = imgui.checkbox("Hide Reset Button", config.hideButtons == true)
       if hbChanged then
         config.hideButtons = hb and true or false; SkillUptime.Config.save()
       end
+      -- transparency controls removed
       imgui.tree_pop()
     end
     -- Developer Options
@@ -1693,33 +1997,51 @@ re.on_config_save(function()
   SkillUptime.Config.load()
 end)
 
-re.on_frame(function()
-  if SkillUptime.UI.open then SkillUptime.UI.draw() end
+-- Helper function to update all game state
+local function update_tracker_state()
   SkillUptime.Core.tick_battle()
-  local skl, _, status = SkillUptime.Skills.update_active_skills()
-  SkillUptime.Items.update_items_and_frenzy(skl, status)
+  SkillUptime.Skills.update_active_skills()
   SkillUptime.Weapons.update_weapon_states()
   SkillUptime.Core.tick_status_flags()
+end
+
+-- Helper function to accumulate uptime for time-based strategies
+local function accumulate_time_based_uptime(in_battle, tnow)
+  SkillUptime.Skills.tick_frenzy_time_uptime(in_battle, tnow)
+  SkillUptime.Core.accumulate_uptime_skills(in_battle, tnow)
+  SkillUptime.Core.accumulate_uptime(SkillUptime.Items.data, SkillUptime.Items.timing_starts, SkillUptime.Items.uptime,
+    in_battle, tnow)
+  SkillUptime.Core.accumulate_uptime(SkillUptime.Flags.data, SkillUptime.Flags.timing_starts, SkillUptime.Flags.uptime,
+    in_battle, tnow)
+  SkillUptime.Core.accumulate_uptime(SkillUptime.Weapons.data, SkillUptime.Weapons.timing_starts,
+    SkillUptime.Weapons.uptime, in_battle, tnow)
+end
+
+-- ============================================================================
+-- Main Frame Loop
+-- ============================================================================
+re.on_frame(function()
+  -- Update all tracker state
+  update_tracker_state()
+
+  -- Accumulate uptimes for time-based strategies only
   local strategy = SkillUptime.Strategy.get_active()
-  local in_battle = SkillUptime.Battle.active
-  local tnow = SkillUptime.Core.now()
-  -- Accumulate uptimes via helper (only for combat strategy)
   if strategy.accumulateTime then
-    -- Frenzy special-case accumulation
-    SkillUptime.Skills.tick_frenzy_time_uptime(in_battle, tnow)
-    SkillUptime.Core.accumulate_uptime(SkillUptime.Items.data, SkillUptime.Items.timing_starts, SkillUptime.Items.uptime,
-      in_battle, tnow)
-    SkillUptime.Core.accumulate_uptime(SkillUptime.Flags.data, SkillUptime.Flags.timing_starts, SkillUptime.Flags.uptime,
-      in_battle, tnow)
-    SkillUptime.Core.accumulate_uptime(SkillUptime.Weapons.data, SkillUptime.Weapons.timing_starts,
-      SkillUptime.Weapons.uptime, in_battle,
-      tnow)
+    accumulate_time_based_uptime(SkillUptime.Battle.active, SkillUptime.Core.now())
+  end
+
+  -- Draw UI
+  if SkillUptime.UI.open then
+    SkillUptime.UI.draw()
   end
 end)
 
--- Register hooks
+-- ============================================================================
+-- Hook Registration
+-- ============================================================================
 SkillUptime.Core.registerHook(FN_BeginSkillLog, SkillUptime.Hooks.onBeginSkillLog, nil)
 SkillUptime.Core.registerHook(FN_EndSkillLog, SkillUptime.Hooks.onEndSkillLog, nil)
 SkillUptime.Core.registerHook(FN_QuestEnter, SkillUptime.Hooks.onQuestEnter, nil)
 SkillUptime.Core.registerHook(FN_SetStatusBuff, SkillUptime.Hooks.onSetStatusBuff, nil)
 SkillUptime.Core.registerHook(FN_HunterHitPost, SkillUptime.Hooks.onHunterHitPost, nil)
+SkillUptime.Core.registerHook(FN_SkillUpdaterLateUpdate, SkillUptime.Hooks.onSkillUpdaterLateUpdate, nil)
