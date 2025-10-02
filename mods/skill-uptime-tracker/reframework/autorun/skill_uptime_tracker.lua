@@ -10,75 +10,75 @@
 -- ============================================================================
 -- Type Definitions
 -- ============================================================================
-local TD_MessageUtil            = sdk.find_type_definition("app.MessageUtil")
-local TD_HunterSkillDef         = sdk.find_type_definition("app.HunterSkillDef")
-local TD_GuiMessage             = sdk.find_type_definition("via.gui.message")
-local TD_SkillEnum              = sdk.find_type_definition("app.HunterDef.Skill")
-local TD_SkillParamInfo         = sdk.find_type_definition("app.cHunterSkillParamInfo")
-local TD_QuestPlaying           = sdk.find_type_definition("app.cQuestPlaying")
-local TD_SoundMusic             = sdk.find_type_definition("app.SoundMusicManager")
-local TD_BattleMusic            = sdk.find_type_definition("app.BattleMusicManager")
-local TD_MissionManager         = sdk.find_type_definition("app.MissionManager")
-local TD_App                    = sdk.find_type_definition("via.Application")
-local TD_HunterCharacter        = sdk.find_type_definition("app.HunterCharacter")
-local TD_EnemyCharacter         = sdk.find_type_definition("app.EnemyCharacter")
-local TD_cHunterSkill           = sdk.find_type_definition("app.cHunterSkill")
-local TD_SkillParamInfo_cInfo   = sdk.find_type_definition("app.cHunterSkillParamInfo.cInfo")
-local TD_HunterSkillUpdater     = sdk.find_type_definition("app.HunterSkillUpdater")
-local TD_ItemDef                = sdk.find_type_definition("app.ItemDef")
-local TD_ActionGuideID          = sdk.find_type_definition("app.ActionGuideID")
+local TD_MessageUtil                  = sdk.find_type_definition("app.MessageUtil")
+local TD_HunterSkillDef               = sdk.find_type_definition("app.HunterSkillDef")
+local TD_GuiMessage                   = sdk.find_type_definition("via.gui.message")
+local TD_SkillEnum                    = sdk.find_type_definition("app.HunterDef.Skill")
+local TD_SkillParamInfo               = sdk.find_type_definition("app.cHunterSkillParamInfo")
+local TD_QuestPlaying                 = sdk.find_type_definition("app.cQuestPlaying")
+local TD_App                          = sdk.find_type_definition("via.Application")
+local TD_HunterCharacter              = sdk.find_type_definition("app.HunterCharacter")
+local TD_EnemyCharacter               = sdk.find_type_definition("app.EnemyCharacter")
+local TD_cHunterSkill                 = sdk.find_type_definition("app.cHunterSkill")
+local TD_SkillParamInfo_cInfo         = sdk.find_type_definition("app.cHunterSkillParamInfo.cInfo")
+local TD_HunterSkillUpdater           = sdk.find_type_definition("app.HunterSkillUpdater")
+local TD_ItemDef                      = sdk.find_type_definition("app.ItemDef")
+local TD_ActionGuideID                = sdk.find_type_definition("app.ActionGuideID")
 
 -- ============================================================================
 -- Type Constants
 -- ============================================================================
-local TYPE_EnemyCharacter       = sdk.typeof(TD_EnemyCharacter:get_full_name())
-local TYPE_HunterCharacter      = sdk.typeof(TD_HunterCharacter:get_full_name())
+local TYPE_EnemyCharacter             = sdk.typeof(TD_EnemyCharacter:get_full_name())
+local TYPE_HunterCharacter            = sdk.typeof(TD_HunterCharacter:get_full_name())
 
 -- ============================================================================
 -- Method Definitions
 -- ============================================================================
-local FN_GetSkillName           =
+local FN_GetSkillName                 =
     TD_MessageUtil:get_method("getHunterSkillName(app.HunterDef.Skill)") or nil
-local FN_GetLeveledSkillName    =
+local FN_GetLeveledSkillName          =
     TD_MessageUtil:get_method("getHunterSkillNameChatLog(app.HunterDef.Skill, System.Int32)") or nil
-local FN_ConvertSkillToGroup    =
+local FN_ConvertSkillToGroup          =
     TD_HunterSkillDef:get_method("convertSkillToGroupSkill(app.HunterDef.Skill)") or nil
-local FN_GetMsg                 = TD_GuiMessage:get_method("get(System.Guid)") or nil
-local FN_GetMsgLang             = TD_GuiMessage:get_method("get(System.Guid, via.Language)") or nil
-local FN_BeginSkillLog          =
-    TD_SkillParamInfo:get_method("beginSkillLog(app.HunterDef.Skill)") or nil
-local FN_EndSkillLog            =
-    TD_SkillParamInfo:get_method("endSkillLog(app.HunterDef.Skill)") or nil
-local FN_QuestEnter             = TD_QuestPlaying:get_method("enter()") or nil
-local FN_GetBattleMusic         = TD_SoundMusic:get_method("get_BattleMusic()") or nil
-local FN_IsBattle               = TD_BattleMusic:get_method("get_IsBattle()") or nil
-local FN_IsActiveQuest          = TD_MissionManager:get_method("get_IsActiveQuest()") or nil
-local FN_IsPlayingQuest         = TD_MissionManager:get_method("get_IsPlayingQuest()") or nil
-local FN_Now                    = TD_App:get_method("get_UpTimeSecond") or nil
-local FN_SetStatusBuff          =
+local FN_GetMsg                       = TD_GuiMessage:get_method("get(System.Guid)") or nil
+local FN_GetMsgLang                   = TD_GuiMessage:get_method("get(System.Guid, via.Language)") or nil
+local FN_BeginSkill                   =
+    TD_SkillParamInfo:get_method("beginSkill(app.HunterDef.Skill, System.Boolean, app.HunterSkillDef.SkillSyncType)") or
+    nil
+local FN_EndSkill                     =
+    TD_SkillParamInfo:get_method("endSkill(app.HunterDef.Skill, System.Boolean)") or nil
+local FN_QuestEnter                   = TD_QuestPlaying:get_method("enter()") or nil
+local FN_Now                          = TD_App:get_method("get_UpTimeSecond") or nil
+local FN_SetStatusBuff                =
     TD_HunterCharacter:get_method("setStatusBuff(app.HunterDef.STATUS_FLAG, System.Single, System.Single)") or nil
-local FN_HunterHitPost          = TD_HunterCharacter:get_method("evHit_AttackPostProcess(app.HitInfo)") or nil
-local FN_SkillUpdaterLateUpdate = TD_HunterSkillUpdater and TD_HunterSkillUpdater:get_method("lateUpdate()") or nil
-local FN_GetSkillLevel2         = TD_cHunterSkill:get_method(
+local FN_HunterHitPost                = TD_HunterCharacter:get_method("evHit_AttackPostProcess(app.HitInfo)") or nil
+local FN_SkillUpdaterLateUpdate       = TD_HunterSkillUpdater and TD_HunterSkillUpdater:get_method("lateUpdate()") or nil
+local FN_GetSkillLevel2               = TD_cHunterSkill:get_method(
   "getSkillLevel(app.HunterDef.Skill, System.Boolean, System.Boolean)") or nil
-local FN_GetItemNameRaw         = TD_ItemDef and TD_ItemDef:get_method("RawName(app.ItemDef.ID)") or nil
+local FN_GetItemNameRaw               = TD_ItemDef and TD_ItemDef:get_method("RawName(app.ItemDef.ID)") or nil
+
+-- Resonance tracking methods
+local FN_BeginResonanceNear           = TD_SkillParamInfo:get_method("beginResonanceNear") or nil
+local FN_BeginResonanceFar            = TD_SkillParamInfo:get_method("beginResonanceFar") or nil
+local FN_BeginResonanceNearCriticalUp = TD_SkillParamInfo:get_method("beginResonanceNearCriticalUp") or nil
+local FN_BeginResonanceFarAttackUp    = TD_SkillParamInfo:get_method("beginResonanceFarAttackUp") or nil
 
 -- ============================================================================
 -- Field Definitions
 -- ============================================================================
-local FLD_FullCharge            = TD_SkillParamInfo:get_field("_IsActiveFullCharge") or nil
-local FLD_Konshin               = TD_SkillParamInfo:get_field("_IsActiveKonshin") or nil
-local FLD_KonshinUse            = TD_SkillParamInfo:get_field("_KonshinStaminaUseTime") or nil
-local FLD_Challenger            = TD_SkillParamInfo:get_field("_IsActiveChallenger") or nil
-local FLD_Info_Skill            = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_Skill") or nil
-local FLD_Info_Timer            = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_Timer") or nil
-local FLD_Info_MaxTimer         = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_MaxTimer") or nil
-local SkillIDMax                = TD_SkillEnum:get_field("MAX"):get_data() or nil
+local FLD_FullCharge                  = TD_SkillParamInfo:get_field("_IsActiveFullCharge") or nil
+local FLD_Konshin                     = TD_SkillParamInfo:get_field("_IsActiveKonshin") or nil
+local FLD_KonshinUse                  = TD_SkillParamInfo:get_field("_KonshinStaminaUseTime") or nil
+local FLD_Challenger                  = TD_SkillParamInfo:get_field("_IsActiveChallenger") or nil
+local FLD_Info_Skill                  = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_Skill") or nil
+local FLD_Info_Timer                  = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_Timer") or nil
+local FLD_Info_MaxTimer               = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_MaxTimer") or nil
+local SkillIDMax                      = TD_SkillEnum:get_field("MAX"):get_data() or nil
 
 -- ============================================================================
 -- Configuration and State Management
 -- ============================================================================
-local config                    = {
+local config                          = {
   openWindow = false,
   strategyIndex = 1,
   show = { skills = true, items = false, flags = false, weapons = false, movedamage = true },
@@ -88,7 +88,7 @@ local config                    = {
 }
 
 -- Module namespace
-local SkillUptime               = {
+local SkillUptime                     = {
   UI       = {
     defaultFont = nil,
     open = false,
@@ -701,6 +701,13 @@ end
 
 SkillUptime.Skills.resolve_name = function(skill_id, level)
   if not skill_id or skill_id < 0 then return "[INVALID_SKILL]" end
+
+  -- Custom names for Resonance tracking (custom skill IDs) - check BEFORE SkillIDMax validation
+  if skill_id == 999001 then return "Resonance Near" end
+  if skill_id == 999002 then return "Resonance Far" end
+  if skill_id == 999003 then return "Resonance Near+Critical" end
+  if skill_id == 999004 then return "Resonance Far+Attack" end
+
   if SkillIDMax and skill_id >= SkillIDMax then return "[INVALID_SKILL]" end
 
   -- Check cache first (with level key if provided)
@@ -1006,7 +1013,7 @@ SkillUptime.Skills.update_active_skills = function()
   return skl, infos, status
 end
 
--- Ensure Frenzy contributes to time-based uptime despite lacking begin/end logs
+-- Frenzy doesn't trigger beginSkill/endSkill hooks, so it needs special polling
 SkillUptime.Skills.tick_frenzy_time_uptime = function(in_battle, tnow)
   local sid = SkillUptime.Const and SkillUptime.Const.FRENZY_SKILL_ID or nil
   if not sid then return end
@@ -1160,23 +1167,32 @@ end
 -- ============================================================================
 -- Game Event Hooks
 -- ============================================================================
-SkillUptime.Hooks.onBeginSkillLog = function(args)
+SkillUptime.Hooks.onBeginSkill = function(args)
   local skill_id = SkillUptime.Skills.extract_skill_id_from_args(args); if not skill_id then
     return
   end
   if SkillUptime.Skills.is_excluded_skill(skill_id) then return end
   local name = SkillUptime.Skills.resolve_name(skill_id, 1)
   SkillUptime.Skills.running[skill_id] = true
+
+  -- Update SkillData for State column display and Timer tracking
+  local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
+  if skillRec then
+    skillRec.Activated = true
+    skillRec.ActivationTime = SkillUptime.Core.now() -- Track when it activated
+  end
+
   if SkillUptime.Battle.active and SkillUptime.Skills.timing_starts[skill_id] == nil then
     SkillUptime.Skills.timing_starts[skill_id] = SkillUptime.Core.now()
   end
   SkillUptime.Util.logDebug(string.format("Skill on:  ID=%d, Name=%s", skill_id, name))
 end
 
-SkillUptime.Hooks.onEndSkillLog = function(args)
+SkillUptime.Hooks.onEndSkill = function(args)
   local skill_id = SkillUptime.Skills.extract_skill_id_from_args(args)
   if not skill_id then return end
   if SkillUptime.Skills.is_excluded_skill(skill_id) then return end
+
   local added = 0.0
   if SkillUptime.Skills.timing_starts[skill_id] then
     added = SkillUptime.Core.now() - SkillUptime.Skills.timing_starts[skill_id]
@@ -1185,6 +1201,22 @@ SkillUptime.Hooks.onEndSkillLog = function(args)
     SkillUptime.Skills.timing_starts[skill_id] = nil
   end
   SkillUptime.Skills.running[skill_id] = nil
+
+  -- Update SkillData for State column display
+  local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
+  if skillRec then
+    skillRec.Activated = false
+    -- Update MaxTimer if this duration was longer
+    if skillRec.ActivationTime then
+      local duration = SkillUptime.Core.now() - skillRec.ActivationTime
+      if duration > (skillRec.MaxTimer or 0) then
+        skillRec.MaxTimer = duration
+      end
+      skillRec.ActivationTime = nil
+    end
+    skillRec.Timer = 0
+  end
+
   local name = SkillUptime.Skills.resolve_name(skill_id, 1)
   if added > 0 then
     SkillUptime.Util.logDebug(string.format("Skill off: ID=%d, Name=%s, +%.3fs", skill_id, name, added))
@@ -1194,28 +1226,105 @@ SkillUptime.Hooks.onEndSkillLog = function(args)
   end
 end
 
--- Accumulate skills uptime using Status.SkillData Activated flags (robust across begin/end signature changes)
-SkillUptime.Core.accumulate_uptime_skills = function(in_battle, tnow)
-  local reg = SkillUptime.Status and SkillUptime.Status.SkillData or nil
-  if not reg then return end
-  for sid, rec in pairs(reg) do
-    if not SkillUptime.Skills.is_excluded_skill(sid) then
-      if in_battle then
-        if rec.Activated and (SkillUptime.Skills.timing_starts[sid] == nil) then
-          SkillUptime.Skills.timing_starts[sid] = tnow
-        elseif (not rec.Activated) and SkillUptime.Skills.timing_starts[sid] then
-          local seg = tnow - SkillUptime.Skills.timing_starts[sid]
-          if seg > 0 then SkillUptime.Skills.uptime[sid] = (SkillUptime.Skills.uptime[sid] or 0) + seg end
-          SkillUptime.Skills.timing_starts[sid] = nil
-        end
-      else
-        if SkillUptime.Skills.timing_starts[sid] then
-          local seg = tnow - SkillUptime.Skills.timing_starts[sid]
-          if seg > 0 then SkillUptime.Skills.uptime[sid] = (SkillUptime.Skills.uptime[sid] or 0) + seg end
-          SkillUptime.Skills.timing_starts[sid] = nil
-        end
+-- Resonance tracking hooks
+-- Resonance is a set bonus skill that alternates between Near (Affinity boost) and Far (Attack boost)
+-- These functions are called continuously while active, so we need to track state changes only
+
+-- Helper function to end all resonance states when switching types
+local function end_all_resonance_states()
+  local resonance_ids = { 999001, 999002, 999003, 999004 }
+  local now = SkillUptime.Core.now()
+
+  for _, skill_id in ipairs(resonance_ids) do
+    if SkillUptime.Skills.timing_starts[skill_id] then
+      local added = now - SkillUptime.Skills.timing_starts[skill_id]
+      if added > 0 then
+        SkillUptime.Skills.uptime[skill_id] = (SkillUptime.Skills.uptime[skill_id] or 0) + added
       end
+      SkillUptime.Skills.timing_starts[skill_id] = nil
     end
+    SkillUptime.Skills.running[skill_id] = nil
+
+    local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
+    if skillRec and skillRec.Activated then
+      skillRec.Activated = false
+      if skillRec.ActivationTime then
+        local duration = now - skillRec.ActivationTime
+        if duration > (skillRec.MaxTimer or 0) then
+          skillRec.MaxTimer = duration
+        end
+        skillRec.ActivationTime = nil
+      end
+      skillRec.Timer = 0
+    end
+  end
+end
+
+SkillUptime.Hooks.onResonanceNear = function(args)
+  local skill_id = 999001 -- Custom ID for Resonance Near
+  -- Only activate if not already running
+  if not SkillUptime.Skills.running[skill_id] then
+    end_all_resonance_states() -- End other resonance states first
+    local now = SkillUptime.Core.now()
+    SkillUptime.Skills.running[skill_id] = true
+    SkillUptime.Skills.timing_starts[skill_id] = now
+    local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
+    if skillRec then
+      skillRec.Activated = true
+      skillRec.ActivationTime = now
+    end
+    SkillUptime.Util.logDebug("Resonance Near activated (Affinity boost)")
+  end
+end
+
+SkillUptime.Hooks.onResonanceFar = function(args)
+  local skill_id = 999002 -- Custom ID for Resonance Far
+  -- Only activate if not already running
+  if not SkillUptime.Skills.running[skill_id] then
+    end_all_resonance_states() -- End other resonance states first
+    local now = SkillUptime.Core.now()
+    SkillUptime.Skills.running[skill_id] = true
+    SkillUptime.Skills.timing_starts[skill_id] = now
+    local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
+    if skillRec then
+      skillRec.Activated = true
+      skillRec.ActivationTime = now
+    end
+    SkillUptime.Util.logDebug("Resonance Far activated (Attack boost)")
+  end
+end
+
+SkillUptime.Hooks.onResonanceNearCriticalUp = function(args)
+  local skill_id = 999003 -- Custom ID for Resonance Near + Critical Up
+  -- Only activate if not already running
+  if not SkillUptime.Skills.running[skill_id] then
+    end_all_resonance_states() -- End other resonance states first
+    local now = SkillUptime.Core.now()
+    SkillUptime.Skills.running[skill_id] = true
+    SkillUptime.Skills.timing_starts[skill_id] = now
+    local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
+    if skillRec then
+      skillRec.Activated = true
+      skillRec.ActivationTime = now
+    end
+    SkillUptime.Util.logDebug("Resonance Near + Critical Up activated (Enhanced Affinity)")
+  end
+end
+
+SkillUptime.Hooks.onResonanceFarAttackUp = function(args)
+  local skill_id = 999004 -- Custom ID for Resonance Far + Attack Up
+  -- Only activate if not already running
+  if not SkillUptime.Skills.running[skill_id] then
+    end_all_resonance_states() -- End other resonance states first
+    local now = SkillUptime.Core.now()
+    SkillUptime.Skills.running[skill_id] = true
+    SkillUptime.Skills.timing_starts[skill_id] = now
+    local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
+    if skillRec then
+      skillRec.Activated = true
+      skillRec.ActivationTime = now
+    end
+    SkillUptime.Util.logDebug("Resonance Far + Attack Up activated (Enhanced Attack)")
   end
 end
 
@@ -1998,17 +2107,30 @@ re.on_config_save(function()
 end)
 
 -- Helper function to update all game state
+-- Update Timer values for skills tracked via hooks
+SkillUptime.Skills.update_hook_tracked_timers = function()
+  local tnow = SkillUptime.Core.now()
+  for skill_id, rec in pairs(SkillUptime.Status and SkillUptime.Status.SkillData or {}) do
+    if rec and rec.Activated and rec.ActivationTime then
+      -- This skill is active and tracked via hooks, update its Timer
+      rec.Timer = tnow - rec.ActivationTime
+    end
+  end
+end
+
 local function update_tracker_state()
   SkillUptime.Core.tick_battle()
   SkillUptime.Skills.update_active_skills()
+  SkillUptime.Skills.update_hook_tracked_timers() -- Update Timer for hook-tracked skills
   SkillUptime.Weapons.update_weapon_states()
   SkillUptime.Core.tick_status_flags()
 end
 
 -- Helper function to accumulate uptime for time-based strategies
 local function accumulate_time_based_uptime(in_battle, tnow)
+  -- Most skills are tracked via hooks (onBeginSkill/onEndSkill)
+  -- Exception: Frenzy doesn't trigger hooks, so it needs polling
   SkillUptime.Skills.tick_frenzy_time_uptime(in_battle, tnow)
-  SkillUptime.Core.accumulate_uptime_skills(in_battle, tnow)
   SkillUptime.Core.accumulate_uptime(SkillUptime.Items.data, SkillUptime.Items.timing_starts, SkillUptime.Items.uptime,
     in_battle, tnow)
   SkillUptime.Core.accumulate_uptime(SkillUptime.Flags.data, SkillUptime.Flags.timing_starts, SkillUptime.Flags.uptime,
@@ -2039,9 +2161,15 @@ end)
 -- ============================================================================
 -- Hook Registration
 -- ============================================================================
-SkillUptime.Core.registerHook(FN_BeginSkillLog, SkillUptime.Hooks.onBeginSkillLog, nil)
-SkillUptime.Core.registerHook(FN_EndSkillLog, SkillUptime.Hooks.onEndSkillLog, nil)
+SkillUptime.Core.registerHook(FN_BeginSkill, SkillUptime.Hooks.onBeginSkill, nil)
+SkillUptime.Core.registerHook(FN_EndSkill, SkillUptime.Hooks.onEndSkill, nil)
 SkillUptime.Core.registerHook(FN_QuestEnter, SkillUptime.Hooks.onQuestEnter, nil)
 SkillUptime.Core.registerHook(FN_SetStatusBuff, SkillUptime.Hooks.onSetStatusBuff, nil)
 SkillUptime.Core.registerHook(FN_HunterHitPost, SkillUptime.Hooks.onHunterHitPost, nil)
 SkillUptime.Core.registerHook(FN_SkillUpdaterLateUpdate, SkillUptime.Hooks.onSkillUpdaterLateUpdate, nil)
+
+-- Resonance tracking hooks
+SkillUptime.Core.registerHook(FN_BeginResonanceNear, SkillUptime.Hooks.onResonanceNear, nil)
+SkillUptime.Core.registerHook(FN_BeginResonanceFar, SkillUptime.Hooks.onResonanceFar, nil)
+SkillUptime.Core.registerHook(FN_BeginResonanceNearCriticalUp, SkillUptime.Hooks.onResonanceNearCriticalUp, nil)
+SkillUptime.Core.registerHook(FN_BeginResonanceFarAttackUp, SkillUptime.Hooks.onResonanceFarAttackUp, nil)
