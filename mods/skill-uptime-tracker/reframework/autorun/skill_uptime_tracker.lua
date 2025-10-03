@@ -42,11 +42,6 @@ local FN_ConvertSkillToGroup          =
     TD_HunterSkillDef:get_method("convertSkillToGroupSkill(app.HunterDef.Skill)") or nil
 local FN_GetMsg                       = TD_GuiMessage:get_method("get(System.Guid)") or nil
 local FN_GetMsgLang                   = TD_GuiMessage:get_method("get(System.Guid, via.Language)") or nil
-local FN_BeginSkill                   =
-    TD_SkillParamInfo:get_method("beginSkill(app.HunterDef.Skill, System.Boolean, app.HunterSkillDef.SkillSyncType)") or
-    nil
-local FN_EndSkill                     =
-    TD_SkillParamInfo:get_method("endSkill(app.HunterDef.Skill, System.Boolean)") or nil
 local FN_QuestEnter                   = TD_QuestPlaying:get_method("enter()") or nil
 local FN_Now                          = TD_App:get_method("get_UpTimeSecond") or nil
 local FN_SetStatusBuff                =
@@ -111,12 +106,42 @@ local SkillUptime                     = {
     name_cache = {},
     hits_up = {},
     InfoFields = {
-      "_ToishiBoostInfo", "_RebellionInfo", "_ElementConvertInfo", "_RyukiInfo", "_MusclemanInfo", "_BarbarianInfo",
-      "_PowerAwakeInfo", "_RyunyuInfo", "_ContinuousAttackInfo", "_GuardianAreaInfo", "_ResentmentInfo", "_KnightInfo",
-      "_MoraleInfo", "_BattoWazaInfo", "_HunkiInfo", "_SlidingPowerUpInfo", "_CounterAttackInfo", "_DisasterInfo",
-      "_MantleStrengtheningInfo", "_BegindAttackInfo", "_YellInfo", "_TechnicalAttack_Info", "_DischargeInfo",
-      "_IamCoalMinerInfo", "_CaptureMasterInfo", "_HagitoriMasterInfo", "_LuckInfo", "_SpringEventInfo",
-      "_SummerEventInfo"
+      -- All cInfo fields from cHunterSkillParamInfo that contain skill data
+      "_ToishiBoostInfo",         -- Sharpness Management
+      "_RebellionInfo",           -- Rebellion
+      "_ElementConvertInfo",      -- Elemental Absorption
+      "_RyukiInfo",               -- Convert Element
+      "_MusclemanInfo",           -- Strongman
+      "_BarbarianInfo",           -- Barbaric Feast
+      "_PowerAwakeInfo",          -- Power Awakening
+      "_RyunyuInfo",              -- Dragon Milk Activation
+      "_ContinuousAttackInfo",    -- Continuous Attack
+      "_GuardianAreaInfo",        -- Guardian Area
+      "_ResentmentInfo",          -- Resentment
+      "_KnightInfo",              -- Offensive Guard
+      "_MoraleInfo",              -- Morale
+      "_BattoWazaInfo",           -- Draw Attack
+      "_HunkiInfo",               -- Poison Enhancement
+      "_SlidingPowerUpInfo",      -- Sliding Power Up
+      "_CounterAttackInfo",       -- Counterstrike
+      "_DisasterInfo",            -- Disaster (Blessing in Disguise)
+      "_MantleStrengtheningInfo", -- Mantle Strengthening
+      "_BegindAttackInfo",        -- Rush Attack
+      "_YellInfo",                -- Yell
+      "_TechnicalAttack_Info",    -- Technical Attack
+      "_DischargeInfo",           -- Discharge
+      "_IamCoalMinerInfo",        -- Coal Miner
+      "_CaptureMasterInfo",       -- Capture Master
+      "_HagitoriMasterInfo",      -- Hagitori Master
+      "_LuckInfo",                -- Luck
+      "_SpringEventInfo",         -- Spring Event
+      "_SummerEventInfo",         -- Summer Event
+      "_AutumnEventInfo",         -- Autumn Event
+      "_DarkBladeInfo",           -- Dark Blade
+      "_DarkWaveInfo",            -- Dark Wave
+      "_CooperationInfo",         -- Cooperation
+      "_ShieldOptionInfo",        -- Shield Option
+      "_ResonanceInfo",           -- Resonance
     }
   },
   Status   = { SkillData = {} },
@@ -335,20 +360,6 @@ local FLAGS_NAME_MAP   = {
 -- Helper function to get current time (shorthand for SkillUptime.Core.now())
 local function now()
   return SkillUptime.Core.now()
-end
-
--- Populate dynamic flag names from enum
-if TD_StatusFlagEnum then
-  local ok, fields = pcall(function() return TD_StatusFlagEnum:get_fields() end)
-  if ok and fields then
-    for _, f in ipairs(fields) do
-      local name = f:get_name()
-      if name and not string.find(name, "__") then
-        local ok2, val = pcall(function() return f:get_data(nil) end)
-        if ok2 and type(val) == "number" then SkillUptime.Flags.names[val] = name end
-      end
-    end
-  end
 end
 
 SkillUptime.Util.logDebug = function(msg)
@@ -989,56 +1000,120 @@ SkillUptime.Skills.update_active_skills = function()
   local skl = SkillUptime.Skills.get_hunter_skill(); if not skl then return nil, nil, nil end
   local infos = skl._HunterSkillParamInfo; if not infos then return skl, nil, nil end
   local status = nil; local okSt, st = pcall(function() return skl:get_Status() end); if okSt then status = st end
-  for _, fname in ipairs(SkillUptime.Skills.InfoFields) do
-    local fld = TD_SkillParamInfo and TD_SkillParamInfo:get_field(fname)
-    if fld then
-      local ok, infoObj = pcall(function() return fld:get_data(infos) end); if ok then
-        SkillUptime.Skills
-            .update_from_info(skl, infoObj)
+
+  -- Poll all skills from cInfo array in _SkillData
+  if status and status._SkillData then
+    local skillDataArray = status._SkillData
+    local count = skillDataArray:get_Count()
+
+    for i = 0, count - 1 do
+      local info = skillDataArray[i]
+      if info then
+        SkillUptime.Skills.update_from_info(skl, info)
       end
     end
   end
-  SkillUptime.Skills.update_boolean(skl, 59, FLD_Challenger and FLD_Challenger:get_data(infos), 0,
-    0)
-  SkillUptime.Skills.update_boolean(skl, 60, FLD_FullCharge and FLD_FullCharge:get_data(infos), 0,
-    0)
+
+  -- Poll named fields that are separate cInfo objects (not in _SkillData array)
+  for _, fname in ipairs(SkillUptime.Skills.InfoFields) do
+    local fld = TD_SkillParamInfo and TD_SkillParamInfo:get_field(fname)
+    if fld then
+      local ok, infoObj = pcall(function() return fld:get_data(infos) end)
+      if ok and infoObj then
+        SkillUptime.Skills.update_from_info(skl, infoObj)
+      end
+    end
+  end
+
+  -- Special handling for Frenzy - Skill ID 194
+  if status and status._BadConditions then
+    local frenzy = status._BadConditions._Frenzy
+    if frenzy and frenzy._IsActive then
+      if frenzy._State == 2 then
+        -- Overcome state - skill is active
+        local timer = frenzy._DurationTimer or 0
+        local maxTimer = frenzy._DurationTime or 0
+        SkillUptime.Skills.update_boolean(skl, 194, timer > 0, timer, maxTimer)
+      else
+        -- Infect (State 0) or Outbreak/Failed (State 1) - skill inactive
+        SkillUptime.Skills.update_boolean(skl, 194, false, 0, 0)
+      end
+    else
+      SkillUptime.Skills.update_boolean(skl, 194, false, 0, 0)
+    end
+  end
+
+  -- Special handling for boolean skills (no timer, just on/off)
+  SkillUptime.Skills.update_boolean(skl, 59, FLD_Challenger and FLD_Challenger:get_data(infos), 0, 0) -- Agitator
+  SkillUptime.Skills.update_boolean(skl, 60, FLD_FullCharge and FLD_FullCharge:get_data(infos), 0, 0) -- Maximum Might
+
+  -- Maximum Might / Konshin - Skill ID 65
   local isKon = FLD_Konshin and FLD_Konshin:get_data(infos)
   local useT = FLD_KonshinUse and (FLD_KonshinUse:get_data(infos) or 0) or 0
   if isKon then
     SkillUptime.Skills.update_boolean(skl, 65, true, math.max(0, 2 - useT), 2)
   else
-    SkillUptime.Skills
-        .update_boolean(skl, 65, false, 0, 0)
+    SkillUptime.Skills.update_boolean(skl, 65, false, 0, 0)
+  end
+
+  -- Adrenaline Rush - Skill ID 101 (Low HP attack boost)
+  local isAdrenaline = infos and infos._IsAdrenalineRush
+  if isAdrenaline ~= nil then
+    SkillUptime.Skills.update_boolean(skl, 101, isAdrenaline, 0, 0)
   end
   return skl, infos, status
 end
 
--- Frenzy doesn't trigger beginSkill/endSkill hooks, so it needs special polling
-SkillUptime.Skills.tick_frenzy_time_uptime = function(in_battle, tnow)
-  local sid = SkillUptime.Const and SkillUptime.Const.FRENZY_SKILL_ID or nil
-  if not sid then return end
-  local frenzyRec = SkillUptime.Status and SkillUptime.Status.SkillData and SkillUptime.Status.SkillData[sid] or nil
-  local frenzyLogged = SkillUptime.Skills.running and SkillUptime.Skills.running[sid]
-  if (not frenzyRec) or frenzyLogged or SkillUptime.Skills.is_excluded_skill(sid) then return end
-  if in_battle then
-    if frenzyRec.Activated and (SkillUptime.Skills.timing_starts[sid] == nil) then
-      SkillUptime.Skills.timing_starts[sid] = tnow
-    elseif (not frenzyRec.Activated) and SkillUptime.Skills.timing_starts[sid] then
-      local seg = tnow - SkillUptime.Skills.timing_starts[sid]
-      if seg > 0 then
-        SkillUptime.Skills.uptime[sid] = (SkillUptime.Skills.uptime[sid] or 0) + seg
+-- Poll all skills and track uptime based on state changes (from polling)
+SkillUptime.Skills.poll_skill_uptime = function(in_battle, tnow)
+  if not in_battle then
+    -- Not in battle - end all active skill timings
+    for skill_id, start_time in pairs(SkillUptime.Skills.timing_starts or {}) do
+      if start_time and not SkillUptime.Skills.is_excluded_skill(skill_id) then
+        local added = tnow - start_time
+        if added > 0 then
+          SkillUptime.Skills.uptime[skill_id] = (SkillUptime.Skills.uptime[skill_id] or 0) + added
+        end
+        SkillUptime.Skills.timing_starts[skill_id] = nil
       end
-      SkillUptime.Skills.timing_starts[sid] = nil
     end
-  else
-    if SkillUptime.Skills.timing_starts[sid] then
-      local seg = tnow - SkillUptime.Skills.timing_starts[sid]
-      if seg > 0 then
-        SkillUptime.Skills.uptime[sid] = (SkillUptime.Skills.uptime[sid] or 0) + seg
+    return
+  end
+
+  -- In battle - check all skills for state changes
+  for skill_id, skillRec in pairs(SkillUptime.Status.SkillData or {}) do
+    if not SkillUptime.Skills.is_excluded_skill(skill_id) then
+      local was_active = SkillUptime.Skills.timing_starts[skill_id] ~= nil
+      local is_active = skillRec.Activated
+
+      if is_active and not was_active then
+        -- Skill just activated
+        SkillUptime.Skills.timing_starts[skill_id] = tnow
+        SkillUptime.Util.logDebug(string.format("Skill on:  ID=%d, Name=%s", skill_id,
+          skillRec.Name or SkillUptime.Skills.resolve_name(skill_id, 1)))
+      elseif not is_active and was_active then
+        -- Skill just deactivated
+        local added = tnow - SkillUptime.Skills.timing_starts[skill_id]
+        if added > 0 then
+          SkillUptime.Skills.uptime[skill_id] = (SkillUptime.Skills.uptime[skill_id] or 0) + added
+        end
+        SkillUptime.Skills.timing_starts[skill_id] = nil
+        if added > 0 then
+          SkillUptime.Util.logDebug(string.format("Skill off: ID=%d, Name=%s, +%.3fs", skill_id,
+            skillRec.Name or SkillUptime.Skills.resolve_name(skill_id, 1), added))
+        else
+          SkillUptime.Util.logDebug(string.format("Skill off: ID=%d, Name=%s", skill_id,
+            skillRec.Name or SkillUptime.Skills.resolve_name(skill_id, 1)))
+        end
       end
-      SkillUptime.Skills.timing_starts[sid] = nil
     end
   end
+end
+
+-- Frenzy doesn't trigger beginSkill/endSkill hooks, so it needs special polling (DEPRECATED - now using polling for all skills)
+SkillUptime.Skills.tick_frenzy_time_uptime = function(in_battle, tnow)
+  -- This function is now deprecated as we poll all skills
+  -- Keeping for compatibility but it does nothing
 end
 
 SkillUptime.Items.ensure_item = function(name)
@@ -1167,64 +1242,6 @@ end
 -- ============================================================================
 -- Game Event Hooks
 -- ============================================================================
-SkillUptime.Hooks.onBeginSkill = function(args)
-  local skill_id = SkillUptime.Skills.extract_skill_id_from_args(args); if not skill_id then
-    return
-  end
-  if SkillUptime.Skills.is_excluded_skill(skill_id) then return end
-  local name = SkillUptime.Skills.resolve_name(skill_id, 1)
-  SkillUptime.Skills.running[skill_id] = true
-
-  -- Update SkillData for State column display and Timer tracking
-  local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
-  if skillRec then
-    skillRec.Activated = true
-    skillRec.ActivationTime = SkillUptime.Core.now() -- Track when it activated
-  end
-
-  if SkillUptime.Battle.active and SkillUptime.Skills.timing_starts[skill_id] == nil then
-    SkillUptime.Skills.timing_starts[skill_id] = SkillUptime.Core.now()
-  end
-  SkillUptime.Util.logDebug(string.format("Skill on:  ID=%d, Name=%s", skill_id, name))
-end
-
-SkillUptime.Hooks.onEndSkill = function(args)
-  local skill_id = SkillUptime.Skills.extract_skill_id_from_args(args)
-  if not skill_id then return end
-  if SkillUptime.Skills.is_excluded_skill(skill_id) then return end
-
-  local added = 0.0
-  if SkillUptime.Skills.timing_starts[skill_id] then
-    added = SkillUptime.Core.now() - SkillUptime.Skills.timing_starts[skill_id]
-    if added < 0 then added = 0 end
-    SkillUptime.Skills.uptime[skill_id] = (SkillUptime.Skills.uptime[skill_id] or 0) + added
-    SkillUptime.Skills.timing_starts[skill_id] = nil
-  end
-  SkillUptime.Skills.running[skill_id] = nil
-
-  -- Update SkillData for State column display
-  local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
-  if skillRec then
-    skillRec.Activated = false
-    -- Update MaxTimer if this duration was longer
-    if skillRec.ActivationTime then
-      local duration = SkillUptime.Core.now() - skillRec.ActivationTime
-      if duration > (skillRec.MaxTimer or 0) then
-        skillRec.MaxTimer = duration
-      end
-      skillRec.ActivationTime = nil
-    end
-    skillRec.Timer = 0
-  end
-
-  local name = SkillUptime.Skills.resolve_name(skill_id, 1)
-  if added > 0 then
-    SkillUptime.Util.logDebug(string.format("Skill off: ID=%d, Name=%s, +%.3fs", skill_id, name, added))
-  else
-    SkillUptime.Util.logDebug(
-      string.format("Skill off: ID=%d, Name=%s", skill_id, name))
-  end
-end
 
 -- Resonance tracking hooks
 -- Resonance is a set bonus skill that alternates between Near (Affinity boost) and Far (Attack boost)
@@ -2108,29 +2125,18 @@ end)
 
 -- Helper function to update all game state
 -- Update Timer values for skills tracked via hooks
-SkillUptime.Skills.update_hook_tracked_timers = function()
-  local tnow = SkillUptime.Core.now()
-  for skill_id, rec in pairs(SkillUptime.Status and SkillUptime.Status.SkillData or {}) do
-    if rec and rec.Activated and rec.ActivationTime then
-      -- This skill is active and tracked via hooks, update its Timer
-      rec.Timer = tnow - rec.ActivationTime
-    end
-  end
-end
-
 local function update_tracker_state()
   SkillUptime.Core.tick_battle()
-  SkillUptime.Skills.update_active_skills()
-  SkillUptime.Skills.update_hook_tracked_timers() -- Update Timer for hook-tracked skills
+  SkillUptime.Skills.update_active_skills() -- Poll all skills from game state
   SkillUptime.Weapons.update_weapon_states()
   SkillUptime.Core.tick_status_flags()
 end
 
+
 -- Helper function to accumulate uptime for time-based strategies
 local function accumulate_time_based_uptime(in_battle, tnow)
-  -- Most skills are tracked via hooks (onBeginSkill/onEndSkill)
-  -- Exception: Frenzy doesn't trigger hooks, so it needs polling
-  SkillUptime.Skills.tick_frenzy_time_uptime(in_battle, tnow)
+  -- All skills are now tracked via polling (not hooks)
+  SkillUptime.Skills.poll_skill_uptime(in_battle, tnow)
   SkillUptime.Core.accumulate_uptime(SkillUptime.Items.data, SkillUptime.Items.timing_starts, SkillUptime.Items.uptime,
     in_battle, tnow)
   SkillUptime.Core.accumulate_uptime(SkillUptime.Flags.data, SkillUptime.Flags.timing_starts, SkillUptime.Flags.uptime,
@@ -2161,8 +2167,6 @@ end)
 -- ============================================================================
 -- Hook Registration
 -- ============================================================================
-SkillUptime.Core.registerHook(FN_BeginSkill, SkillUptime.Hooks.onBeginSkill, nil)
-SkillUptime.Core.registerHook(FN_EndSkill, SkillUptime.Hooks.onEndSkill, nil)
 SkillUptime.Core.registerHook(FN_QuestEnter, SkillUptime.Hooks.onQuestEnter, nil)
 SkillUptime.Core.registerHook(FN_SetStatusBuff, SkillUptime.Hooks.onSetStatusBuff, nil)
 SkillUptime.Core.registerHook(FN_HunterHitPost, SkillUptime.Hooks.onHunterHitPost, nil)
