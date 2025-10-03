@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/thieleju/mhws-mods/compare/skill-uptime-tracker-v1.4.0...skill-uptime-tracker-v1.4.1) (2025-10-03)
+
+
+### Bug Fixes
+
+* switch to polling strategy to get skill info ([928023f](https://github.com/thieleju/mhws-mods/commit/928023fbcf4f90004921e87cb8938575bd81b98b))
+
 # [1.4.0](https://github.com/thieleju/mhws-mods/compare/skill-uptime-tracker-v1.3.0...skill-uptime-tracker-v1.4.0) (2025-10-02)
 
 
