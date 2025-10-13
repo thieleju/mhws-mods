@@ -293,7 +293,8 @@ local function onEnterQuestReward(args)
   end
 
   -- trim memberAwardStats according to final member count (memberNum)
-  for i = #memberAwardStats, memberNum + 1, -1 do
+  -- remove any cached entries whose memberIndex is outside the reported range
+  for i = #memberAwardStats, memberNum + 2, -1 do
     logDebug(string.format("Removing memberAwardStats[%d] for exceeding memberNum %d", i, memberNum))
     memberAwardStats[i] = nil
   end
@@ -308,43 +309,43 @@ local function onEnterQuestReward(args)
   local award01DataSum = { 0, 0, 0, 0 }
 
   -- complete memberAwardStats with user info and damage stats
-  for i = 0, memberNum - 1 do
-    local user = userInfoArray[i]
+  for arrayIndex = 1, #memberAwardStats do
+    local entry = memberAwardStats[arrayIndex]
+    if entry then
+      local memberIndex = entry.memberIndex or (arrayIndex - 1)
+      local user = userInfoArray[memberIndex] or userInfoArray[memberIndex + 1]
 
-    -- if user:get_PlName() returns nil, skip this member
-    if not user or not safeCall(function() return user:get_PlName() end) then
-      logDebug(string.format("User at index %d is nil or has no name, skipping", i))
-      memberAwardStats[i + 1] = nil
-      goto continue
+      local username = entry.username or string.format("Player %d", memberIndex)
+      local shortHunterId = entry.shortHunterId or "Unknown"
+      local isSelf = entry.isSelf or false
+
+      if user and safeCall(function() return user:get_PlName() end) then
+        username = safeCall(function() return user:get_PlName() end) or username
+        shortHunterId = safeCall(function() return user:get_ShortHunterId() end) or shortHunterId
+        isSelf = safeCall(function() return user:get_IsSelf() end) or isSelf
+        logDebug(string.format("Member %s is at index %d", username, memberIndex))
+      else
+        logDebug(string.format("User at index %d is nil or has no name, keeping cached data", memberIndex))
+      end
+
+      local damageEntry = entry.awards[DAMAGE_AWARD_ID + 1] or { count = 0 }
+      local damageValue = damageEntry.count or 0
+      local damagePercentage = totalDamage > 0 and (damageValue / totalDamage) * 100 or 0
+
+      entry.username = username
+      entry.shortHunterId = shortHunterId
+      entry.isSelf = isSelf
+      entry.damageTotal = roundToTwoDecimalPlaces(totalDamage)
+      entry.damagePercentage = roundToTwoDecimalPlaces(damagePercentage)
+      entry.damage = roundToTwoDecimalPlaces(damageValue)
+
+      local arr = (entry.awards[1] and entry.awards[1].award01Array) or { 0, 0, 0, 0 }
+      for j = 1, 4 do
+        award01DataSum[j] = award01DataSum[j] + (arr[j] or 0)
+      end
+
+      memberAwardStats[arrayIndex] = entry
     end
-
-    -- safeCall all the :get_ methods
-    local username = safeCall(function() return user:get_PlName() end) or "Unknown"
-    local shortHunterId = safeCall(function() return user:get_ShortHunterId() end) or "Unknown"
-    local isSelf = safeCall(function() return user:get_IsSelf() end) or false
-
-    logDebug(string.format("Member %s is at index %d", username, i))
-
-    local entry = memberAwardStats[i + 1] or { memberIndex = i, awards = {} }
-    local damage = entry.awards[DAMAGE_AWARD_ID + 1].count
-    local damagePercentage = totalDamage > 0 and (damage / totalDamage) * 100 or 0
-
-    entry.username = username
-    entry.shortHunterId = shortHunterId
-    entry.isSelf = isSelf
-    entry.damageTotal = roundToTwoDecimalPlaces(totalDamage)
-    entry.damagePercentage = roundToTwoDecimalPlaces(damagePercentage)
-    entry.damage = roundToTwoDecimalPlaces(damage)
-
-    -- add award01 data for each member to total award01DataSum
-    local arr = (entry.awards[1] and entry.awards[1].award01Array) or { 0, 0, 0, 0 }
-    for j = 1, 4 do
-      award01DataSum[j] = award01DataSum[j] + arr[j]
-    end
-
-    memberAwardStats[i + 1] = entry
-
-    ::continue::
   end
 
   -- remove all nil entries from memberAwardStats
