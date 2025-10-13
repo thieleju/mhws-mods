@@ -1,3 +1,28 @@
+# [1.6.0](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.5.0...better-hunter-highlights-v1.6.0) (2025-10-13)
+
+
+### Bug Fixes
+
+* correct package name from 'mhw-mods' to 'mhws-mods' in package.json and package-lock.json ([681f28a](https://github.com/thieleju/mhws-mods/commit/681f28a27e6ad469a82379e13ba256acdd5b303c))
+* fix issue with member data being removed in some cases ([df72e96](https://github.com/thieleju/mhws-mods/commit/df72e964747eef2e7dc42610b7bbe232e4e1136b))
+* switch to polling strategy to get skill info ([928023f](https://github.com/thieleju/mhws-mods/commit/928023fbcf4f90004921e87cb8938575bd81b98b))
+* test change in skill uptime tracker mod ([1b62dc3](https://github.com/thieleju/mhws-mods/commit/1b62dc3d6e119250a3502ccff1d629533b644c55))
+* update release workflow to install dependencies in root workspaces and streamline build and publish steps ([115a7ab](https://github.com/thieleju/mhws-mods/commit/115a7ab178e710ee2d14dd89541f7aca13f1bd9c))
+
+
+### Features
+
+* add automatic README update for Latest Releases section ([bec645a](https://github.com/thieleju/mhws-mods/commit/bec645ab3a4eedbdc12899369702f67d42484e93))
+* add customizability and fix skills like gore ([1bf45d2](https://github.com/thieleju/mhws-mods/commit/1bf45d23e3e6512d50cb80887f427c9e59d92f83))
+* add experimental resonance tracking ([e112077](https://github.com/thieleju/mhws-mods/commit/e1120770ee64c04b9f44984bfb06d131fd7769db))
+* add move damage and fix for tu3 ([3a52f31](https://github.com/thieleju/mhws-mods/commit/3a52f3155561527c570fcc77cc06ffd8dd1ee618))
+* add move damage strategy ([0356c58](https://github.com/thieleju/mhws-mods/commit/0356c5856b5a8c19aefd9cf450b078e4c2c30525))
+* add readme ([2b8fa65](https://github.com/thieleju/mhws-mods/commit/2b8fa6501d93a1d6168f70ae2f0ac6d9a18e9085))
+* add screenshot5 to skill uptime tracker assets ([ccdd865](https://github.com/thieleju/mhws-mods/commit/ccdd8659a63f4773605f39d1374788a79be5274b))
+* add skill uptime tracker v1.0.0 ([6a795fe](https://github.com/thieleju/mhws-mods/commit/6a795fe112641b6f8527593d8f0ae663c85467ef))
+* add skill uptime tracker v1.0.0 to package-lock.json ([a14ec46](https://github.com/thieleju/mhws-mods/commit/a14ec46f1389cb590cca523c2be4ef055e20b123))
+* test change in skill-uptime-tracker ([413ac60](https://github.com/thieleju/mhws-mods/commit/413ac606001d2fb0e7784edb955cb2161f80e6d2))
+
 # [1.5.0](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.4.3...better-hunter-highlights-v1.5.0) (2025-09-23)
 
 
