@@ -1,5 +1,5 @@
 {
-  "name": "mhw-mods",
+  "name": "mhws-mods",
   "workspaces": [
     "mods/*"
   ],
