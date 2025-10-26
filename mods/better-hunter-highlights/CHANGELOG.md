@@ -1,3 +1,10 @@
+## [1.6.1](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.6.0...better-hunter-highlights-v1.6.1) (2025-10-26)
+
+
+### Bug Fixes
+
+* fix issue with members showing up multiple times if below 4 players ([19a9512](https://github.com/thieleju/mhws-mods/commit/19a9512cc0dc9d861ed968af9cd00c5f7950549e))
+
 # [1.6.0](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.5.0...better-hunter-highlights-v1.6.0) (2025-10-13)
 
 
