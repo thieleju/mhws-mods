@@ -256,9 +256,26 @@ local function onSetSharedQuestAwardInfo(args)
     })
   end
 
-  -- update playerstats
+  -- Get player identity info for matching at quest end
+  local userInfoArray, memberNum = getQuestUserInfo()
+  local username = nil
+  local shortHunterId = nil
+  local isSelf = false
+
+  if userInfoArray and userIndex < memberNum then
+    local user = userInfoArray[userIndex]
+    if user then
+      username = safeCall(function() return user:get_PlName() end)
+      shortHunterId = safeCall(function() return user:get_ShortHunterId() end)
+      isSelf = safeCall(function() return user:get_IsSelf() end) or false
+    end
+  end
+
   memberAwardStats[userIndex + 1] = {
     memberIndex = userIndex,
+    username = username,
+    shortHunterId = shortHunterId,
+    isSelf = isSelf,
     awards = statsArray
   }
 
@@ -292,49 +309,81 @@ local function onEnterQuestReward(args)
     return sdk.PreHookResult.CALL_ORIGINAL
   end
 
-  -- trim memberAwardStats according to final member count (memberNum)
-  -- remove any cached entries whose memberIndex is outside the reported range
-  for i = #memberAwardStats, memberNum + 2, -1 do
-    logDebug(string.format("Removing memberAwardStats[%d] for exceeding memberNum %d", i, memberNum))
-    memberAwardStats[i] = nil
+  logDebug(string.format("Processing %d quest members for award stats", memberNum))
+
+  -- Build a lookup map of current members by shortHunterId
+  local currentMembersMap = {}
+  for i = 0, memberNum - 1 do
+    local user = userInfoArray[i]
+    if user then
+      local shortHunterId = safeCall(function() return user:get_ShortHunterId() end)
+      local username = safeCall(function() return user:get_PlName() end)
+      if shortHunterId and username then
+        currentMembersMap[shortHunterId] = {
+          arrayIndex = i,
+          username = username,
+          shortHunterId = shortHunterId,
+          isSelf = safeCall(function() return user:get_IsSelf() end) or false
+        }
+        logDebug(string.format("Current member at quest-end index %d: %s (ID: %s)", i, username, shortHunterId))
+      end
+    end
   end
+
+  -- Filter memberAwardStats to only include members who are still in the quest
+  -- Keep only the most recent entry (highest memberIndex) for each unique shortHunterId
+  local validMemberStats = {}
+  local seenHunterIds = {} -- Track which hunter IDs we've already added
+
+  -- Process entries in reverse order (highest memberIndex first) to get most recent stats
+  for i = #memberAwardStats, 1, -1 do
+    local entry = memberAwardStats[i]
+    if entry and entry.shortHunterId and currentMembersMap[entry.shortHunterId] then
+      -- Check if we haven't already added an entry for this hunter ID
+      if not seenHunterIds[entry.shortHunterId] then
+        -- This member is still present at quest end
+        local currentMember = currentMembersMap[entry.shortHunterId]
+        entry.username = currentMember.username
+        entry.shortHunterId = currentMember.shortHunterId
+        entry.isSelf = currentMember.isSelf
+        -- Update the array index to match the quest-end position
+        entry.finalArrayIndex = currentMember.arrayIndex
+        table.insert(validMemberStats, 1, entry) -- Insert at beginning to maintain order
+        seenHunterIds[entry.shortHunterId] = true
+        logDebug(string.format("Keeping stats for %s (original memberIndex=%d, final arrayIndex=%d)",
+          entry.username, entry.memberIndex, entry.finalArrayIndex))
+      else
+        logDebug(string.format("Skipping duplicate entry for %s (memberIndex=%d, already have more recent stats)",
+          entry.username or "Unknown", entry.memberIndex))
+      end
+    else
+      local name = entry.username or (entry.memberIndex and string.format("Player %d", entry.memberIndex)) or "Unknown"
+      logDebug(string.format("Removing stats for %s (disconnected or not present)", name))
+    end
+  end
+
+  -- Replace memberAwardStats with the filtered list
+  memberAwardStats = validMemberStats
 
   -- Calculate total damage for percentage calculation
   local totalDamage = 0
   for _, data in ipairs(memberAwardStats) do
-    totalDamage = totalDamage + (data.awards[DAMAGE_AWARD_ID + 1].count or 0)
+    if data and data.awards and data.awards[DAMAGE_AWARD_ID + 1] then
+      totalDamage = totalDamage + (data.awards[DAMAGE_AWARD_ID + 1].count or 0)
+    end
   end
 
   -- calculate award01 data for each member
   local award01DataSum = { 0, 0, 0, 0 }
 
-  -- complete memberAwardStats with user info and damage stats
+  -- Update damage stats for each remaining member
   for arrayIndex = 1, #memberAwardStats do
     local entry = memberAwardStats[arrayIndex]
     if entry then
-      local memberIndex = entry.memberIndex or (arrayIndex - 1)
-      local user = userInfoArray[memberIndex] or userInfoArray[memberIndex + 1]
-
-      local username = entry.username or string.format("Player %d", memberIndex)
-      local shortHunterId = entry.shortHunterId or "Unknown"
-      local isSelf = entry.isSelf or false
-
-      if user and safeCall(function() return user:get_PlName() end) then
-        username = safeCall(function() return user:get_PlName() end) or username
-        shortHunterId = safeCall(function() return user:get_ShortHunterId() end) or shortHunterId
-        isSelf = safeCall(function() return user:get_IsSelf() end) or isSelf
-        logDebug(string.format("Member %s is at index %d", username, memberIndex))
-      else
-        logDebug(string.format("User at index %d is nil or has no name, keeping cached data", memberIndex))
-      end
-
       local damageEntry = entry.awards[DAMAGE_AWARD_ID + 1] or { count = 0 }
       local damageValue = damageEntry.count or 0
       local damagePercentage = totalDamage > 0 and (damageValue / totalDamage) * 100 or 0
 
-      entry.username = username
-      entry.shortHunterId = shortHunterId
-      entry.isSelf = isSelf
       entry.damageTotal = roundToTwoDecimalPlaces(totalDamage)
       entry.damagePercentage = roundToTwoDecimalPlaces(damagePercentage)
       entry.damage = roundToTwoDecimalPlaces(damageValue)
@@ -345,14 +394,6 @@ local function onEnterQuestReward(args)
       end
 
       memberAwardStats[arrayIndex] = entry
-    end
-  end
-
-  -- remove all nil entries from memberAwardStats
-  for i = #memberAwardStats, 1, -1 do
-    if not memberAwardStats[i] then
-      logDebug(string.format("Removing nil memberAwardStats[%d]", i))
-      table.remove(memberAwardStats, i)
     end
   end
 
@@ -594,22 +635,9 @@ local function onQuestMemberLeave(args)
     "PlayerManager: evNetLeaveMember called with SESSION_TYPE %d, memberIndex %d",
     sessionType, memberIndex))
 
-  local userInfoArray = getQuestUserInfo()
-  if not userInfoArray then
-    logError("Failed to get user info array in evNetLeaveMember.")
-    return sdk.PreHookResult.CALL_ORIGINAL
-  end
+  logDebug(string.format("Member %d left, but keeping their stats for potential rejoin", memberIndex))
 
-  -- remove memberAwardStats entry for the leaving member and shift the indices
-  for i = 1, #memberAwardStats do
-    if memberAwardStats[i].memberIndex == memberIndex then
-      logDebug(string.format("Removing memberAwardStats[%d] for leaving member %d", i, memberIndex))
-      table.remove(memberAwardStats, i)
-      break
-    end
-  end
-
-  -- Cache the latest memberAwardStats
+  -- Cache the current memberAwardStats
   config.cache = memberAwardStats
   saveConfig()
 end
