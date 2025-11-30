@@ -78,7 +78,7 @@ local SkillIDMax                      = TD_SkillEnum:get_field("MAX"):get_data()
 local config                          = {
   openWindow = false,
   strategyIndex = 1,
-  show = { skills = true, items = false, flags = false, weapons = false, movedamage = true },
+  show = { skills = true, items = false, flags = false, weapons = false, movedamage = true, auto_close = false, auto_open = false },
   columns = { primary = true, percent = true, active = true, state = true },
   debug = false,
   hideButtons = false,
@@ -1241,6 +1241,32 @@ SkillUptime.Weapons.update_weapon_states = function()
   recA.Activated = isArch; recA.Meter = gaugePct
 end
 
+-- Helper function to open UI window
+local function openWindow()
+  SkillUptime.UI.open = true
+  config.openWindow = true
+  SkillUptime.Config.save()
+end
+
+local function autoOpenWindow()
+  if config.show.auto_open then
+    openWindow()
+  end
+end
+
+-- Helper function to close UI window
+local function closeWindow()
+  SkillUptime.UI.open = false
+  config.openWindow = false
+  SkillUptime.Config.save()
+end
+
+local function autoCloseWindow()
+  if config.show.auto_close then
+    closeWindow()
+  end
+end
+
 -- ============================================================================
 -- Game Event Hooks
 -- ============================================================================
@@ -2147,19 +2173,7 @@ local function accumulate_time_based_uptime(in_battle, tnow)
     SkillUptime.Weapons.uptime, in_battle, tnow)
 end
 
--- Helper function to open UI window
-local function openWindow()
-  SkillUptime.UI.open = true
-  config.openWindow = true
-  SkillUptime.Config.save()
-end
 
--- Helper function to close UI window
-local function closeWindow()
-  SkillUptime.UI.open = false
-  config.openWindow = false
-  SkillUptime.Config.save()
-end
 
 
 -- ============================================================================
