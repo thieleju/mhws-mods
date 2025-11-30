@@ -1383,6 +1383,7 @@ SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
   SkillUptime.Hits.total = 0
   SkillUptime.Util.logDebug("Quest enter: cleared trackers and counters")
+  autoCloseWindow()
 end
 
 -- Manual reset for session stats
@@ -2079,6 +2080,14 @@ re.on_draw_ui(function()
     if toggled then
       config.show.flags = SkillUptime.UI.tables.Flags; SkillUptime.Config.save()
     end
+    toggled, config.show.auto_close = imgui.checkbox("Automatically Close On Quest Enter", config.show.auto_close)
+    if toggled then
+      SkillUptime.Config.save()
+    end
+    toggled, config.show.auto_open = imgui.checkbox("Automatically Open On Quest End", config.show.auto_open)
+    if toggled then
+      SkillUptime.Config.save()
+    end
     imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
     toggled, SkillUptime.UI.tables.Weapons = imgui.checkbox("Weapon States (only DBs atm)",
       SkillUptime.UI.tables.Weapons)
@@ -2208,3 +2217,5 @@ SkillUptime.Core.registerHook(FN_BeginResonanceNear, SkillUptime.Hooks.onResonan
 SkillUptime.Core.registerHook(FN_BeginResonanceFar, SkillUptime.Hooks.onResonanceFar, nil)
 SkillUptime.Core.registerHook(FN_BeginResonanceNearCriticalUp, SkillUptime.Hooks.onResonanceNearCriticalUp, nil)
 SkillUptime.Core.registerHook(FN_BeginResonanceFarAttackUp, SkillUptime.Hooks.onResonanceFarAttackUp, nil)
+
+SkillUptime.Core.registerHook(FN_QuestEnd, autoOpenWindow, nil)
