@@ -2145,6 +2145,21 @@ local function accumulate_time_based_uptime(in_battle, tnow)
     SkillUptime.Weapons.uptime, in_battle, tnow)
 end
 
+-- Helper function to open UI window
+local function openWindow()
+  SkillUptime.UI.open = true
+  config.openWindow = true
+  SkillUptime.Config.save()
+end
+
+-- Helper function to close UI window
+local function closeWindow()
+  SkillUptime.UI.open = false
+  config.openWindow = false
+  SkillUptime.Config.save()
+end
+
+
 -- ============================================================================
 -- Main Frame Loop
 -- ============================================================================
