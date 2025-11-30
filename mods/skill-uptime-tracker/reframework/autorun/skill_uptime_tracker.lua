@@ -16,6 +16,7 @@ local TD_GuiMessage                   = sdk.find_type_definition("via.gui.messag
 local TD_SkillEnum                    = sdk.find_type_definition("app.HunterDef.Skill")
 local TD_SkillParamInfo               = sdk.find_type_definition("app.cHunterSkillParamInfo")
 local TD_QuestPlaying                 = sdk.find_type_definition("app.cQuestPlaying")
+local TD_QuestResult                  = sdk.find_type_definition("app.cQuestResult")
 local TD_App                          = sdk.find_type_definition("via.Application")
 local TD_HunterCharacter              = sdk.find_type_definition("app.HunterCharacter")
 local TD_EnemyCharacter               = sdk.find_type_definition("app.EnemyCharacter")
@@ -43,6 +44,7 @@ local FN_ConvertSkillToGroup          =
 local FN_GetMsg                       = TD_GuiMessage:get_method("get(System.Guid)") or nil
 local FN_GetMsgLang                   = TD_GuiMessage:get_method("get(System.Guid, via.Language)") or nil
 local FN_QuestEnter                   = TD_QuestPlaying:get_method("enter()") or nil
+local FN_QuestEnd                     = TD_QuestResult:get_method("enter()") or nil
 local FN_Now                          = TD_App:get_method("get_UpTimeSecond") or nil
 local FN_SetStatusBuff                =
     TD_HunterCharacter:get_method("setStatusBuff(app.HunterDef.STATUS_FLAG, System.Single, System.Single)") or nil
