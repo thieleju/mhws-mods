@@ -2182,9 +2182,6 @@ local function accumulate_time_based_uptime(in_battle, tnow)
     SkillUptime.Weapons.uptime, in_battle, tnow)
 end
 
-
-
-
 -- ============================================================================
 -- Main Frame Loop
 -- ============================================================================
