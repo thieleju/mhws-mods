@@ -2071,14 +2071,9 @@ re.on_draw_ui(function()
     if toggled then
       config.show.skills = SkillUptime.UI.tables.Skills; SkillUptime.Config.save()
     end
-    -- Direct toggles with (experimental) tag
     toggled, SkillUptime.UI.tables.Items = imgui.checkbox("Item Buffs", SkillUptime.UI.tables.Items)
     if toggled then
       config.show.items = SkillUptime.UI.tables.Items; SkillUptime.Config.save()
-    end
-    toggled, SkillUptime.UI.tables.Flags = imgui.checkbox("Status Flags", SkillUptime.UI.tables.Flags)
-    if toggled then
-      config.show.flags = SkillUptime.UI.tables.Flags; SkillUptime.Config.save()
     end
     toggled, config.show.auto_close = imgui.checkbox("Automatically Close On Quest Enter", config.show.auto_close)
     if toggled then
@@ -2087,6 +2082,11 @@ re.on_draw_ui(function()
     toggled, config.show.auto_open = imgui.checkbox("Automatically Open On Quest End", config.show.auto_open)
     if toggled then
       SkillUptime.Config.save()
+    end
+    -- Direct toggles with (experimental) tag
+    toggled, SkillUptime.UI.tables.Flags = imgui.checkbox("Status Flags", SkillUptime.UI.tables.Flags)
+    if toggled then
+      config.show.flags = SkillUptime.UI.tables.Flags; SkillUptime.Config.save()
     end
     imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
     toggled, SkillUptime.UI.tables.Weapons = imgui.checkbox("Weapon States (only DBs atm)",
