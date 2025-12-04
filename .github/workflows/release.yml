@@ -36,45 +36,30 @@ jobs:
       - name: Install dependencies (root workspaces)
         run: npm ci --workspaces --include-workspace-root
 
-      - name: Semantic Release Dry Run (get next version)
-        id: semantic_release
+      - name: Check if release is needed (dry-run)
+        id: check_release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd $MOD_PATH
-          npx semantic-release --dry-run > semantic-output.txt
-
-      - name: Extract version
-        id: extract_version
-        run: |
-          VERSION=$(grep -oP 'The next release version is \K[0-9]+\.[0-9]+\.[0-9]+' $MOD_PATH/semantic-output.txt || true)
-          if [ -z "$VERSION" ]; then
-            echo "No version found, skipping release."
-            echo "continue=false" >> $GITHUB_OUTPUT
-            exit 0
+          if npx semantic-release --dry-run 2>&1 | grep -q "Published release"; then
+            echo "needs_release=true" >> $GITHUB_OUTPUT
+            echo "New release will be published"
+          else
+            echo "needs_release=false" >> $GITHUB_OUTPUT
+            echo "No release needed - no relevant commits found"
           fi
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "continue=true" >> $GITHUB_OUTPUT
-          echo "Next version: $VERSION"
 
-      - name: Build mod
-        if: steps.extract_version.outputs.continue == 'true'
-        run: |
-          cd "$MOD_PATH"
-          npm run build
-        env:
-          VERSION: ${{ env.VERSION }}
-          MOD_NAME: ${{ env.MOD_NAME }}
-
-      - name: Publish Release
-        if: steps.extract_version.outputs.continue == 'true'
+      - name: Run Semantic Release
+        if: steps.check_release.outputs.needs_release == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd "$MOD_PATH"
+          cd $MOD_PATH
           npx semantic-release
+
       - name: Update Latest Releases links in README
-        if: steps.extract_version.outputs.continue == 'true'
+        if: steps.check_release.outputs.needs_release == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

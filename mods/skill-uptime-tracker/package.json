@@ -1,14 +1,16 @@
 {
   "name": "skill-uptime-tracker",
-  "version": "1.0.0",
+  "version": "1.4.1",
   "scripts": {
     "build": "MOD_NAME=skill-uptime-tracker node ../../build.js"
   },
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/exec": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^11.0.3",
     "archiver": "^7.0.1",
-    "semantic-release": "^24.2.5"
+    "semantic-release": "^25.0.2",
+    "semantic-release-monorepo": "^8.0.2"
   }
 }

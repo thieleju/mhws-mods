@@ -8,3 +8,16 @@ This repository contains various mods for the game Monster Hunter Wilds and buil
 
 - [Better Hunter Highlights 1.6.1](https://github.com/thieleju/mhws-mods/releases/tag/better-hunter-highlights-v1.6.1)
 - [Skill Uptime Tracker 1.4.1](https://github.com/thieleju/mhws-mods/releases/tag/skill-uptime-tracker-v1.4.1)
+
+## Contributing
+
+To contribute to this project, please follow the commit message conventions below.  
+Commit messages should follow the format **`type(scope): description`**.
+
+Examples:
+
+- `feat(<module>): add new feature`
+- `fix(<module>): fix a bug`
+- `chore(<module>): general maintenance or code cleanup`
+
+Replace `<module>` with the mod name you're working on (e.g., `better-hunter-highlights`, `skill-uptime-tracker`).
