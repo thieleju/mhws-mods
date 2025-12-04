@@ -1,3 +1,10 @@
+# [skill-uptime-tracker-v1.4.2](https://github.com/thieleju/mhws-mods/compare/skill-uptime-tracker-v1.4.1...skill-uptime-tracker-v1.4.2) (2025-12-04)
+
+
+### Bug Fixes
+
+* **skill-uptime-tracker:** adjust file header to include absolute path to the mod ([9f72638](https://github.com/thieleju/mhws-mods/commit/9f7263843fe79febb231d8f7ad3fa8ab3c833490))
+
 ## [1.4.1](https://github.com/thieleju/mhws-mods/compare/skill-uptime-tracker-v1.4.0...skill-uptime-tracker-v1.4.1) (2025-10-03)
 
 
