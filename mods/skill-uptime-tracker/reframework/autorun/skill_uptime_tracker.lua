@@ -3,7 +3,7 @@
 --
 -- Props to the authors of CatLib and mhwilds_overlay, I used their code as a reference.
 --
--- @author https://github.com/thieleju
+-- @repo https://github.com/thieleju/mhws-mods/tree/main/mods/skill-uptime-tracker
 --
 ---@diagnostic disable: undefined-global, undefined-doc-name, undefined-field
 
