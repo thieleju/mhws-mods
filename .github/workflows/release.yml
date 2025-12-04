@@ -22,6 +22,11 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Select mod
         id: select_mod
         run: |
@@ -42,7 +47,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd $MOD_PATH
-          if npx semantic-release --dry-run 2>&1 | grep -q "Published release"; then
+          OUTPUT=$(npx semantic-release --dry-run 2>&1)
+          echo "$OUTPUT"
+          if echo "$OUTPUT" | grep -qE "The next release version is|Published release"; then
             echo "needs_release=true" >> $GITHUB_OUTPUT
             echo "New release will be published"
           else
