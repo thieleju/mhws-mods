@@ -1,3 +1,10 @@
+# [better-hunter-highlights-v1.6.2](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.6.1...better-hunter-highlights-v1.6.2) (2025-12-04)
+
+
+### Bug Fixes
+
+* **better-hunter-highlights:** adjust file header to include absolute path to the mod ([7708316](https://github.com/thieleju/mhws-mods/commit/77083160b75d666703a881fdfac958d53ebacea8))
+
 ## [1.6.1](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.6.0...better-hunter-highlights-v1.6.1) (2025-10-26)
 
 
