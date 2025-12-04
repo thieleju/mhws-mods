@@ -14,13 +14,18 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "MOD_NAME=skill-uptime-tracker VERSION=${nextRelease.version} node ../../build.js"
+        "prepareCmd": "MOD_NAME=skill-uptime-tracker VERSION=${nextRelease.version} node ../../build.js && node ../../update-readme.js"
       }
     ],
     [
       "@semantic-release/git",
       {
-        "assets": ["CHANGELOG.md", "package.json", "modinfo.ini"],
+        "assets": [
+          "CHANGELOG.md",
+          "package.json",
+          "modinfo.ini",
+          "../../README.md"
+        ],
         "message": "chore(skill-uptime-tracker): release v${nextRelease.version} [skip ci]"
       }
     ],
