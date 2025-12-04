@@ -1,7 +1,7 @@
 --
 -- Better Hunter Highlights
 --
--- @author https://github.com/thieleju
+-- @repo https://github.com/thieleju/mhws-mods/tree/main/mods/better-hunter-highlights
 --
 ---@diagnostic disable: undefined-global, undefined-doc-name
 
