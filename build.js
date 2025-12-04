@@ -39,7 +39,16 @@ if (!fs.existsSync(distRoot)) {
   fs.mkdirSync(distRoot, { recursive: true });
 }
 
-// --- 1) Update modinfo.ini ---
+// --- 1) Update package.json version ---
+const modPkgPath = path.join(modPath, "package.json");
+if (fs.existsSync(modPkgPath)) {
+  const modPkg = JSON.parse(fs.readFileSync(modPkgPath, "utf-8"));
+  modPkg.version = version;
+  fs.writeFileSync(modPkgPath, JSON.stringify(modPkg, null, 2) + "\n", "utf-8");
+  console.log(`✔ Updated package.json to version ${version}`);
+}
+
+// --- 2) Update modinfo.ini ---
 if (fs.existsSync(modinfoPath)) {
   let modinfoContent = fs.readFileSync(modinfoPath, "utf-8");
   modinfoContent = modinfoContent.replace(
@@ -52,7 +61,7 @@ if (fs.existsSync(modinfoPath)) {
   console.warn(`⚠ No modinfo.ini found for ${modName}, skipping update.`);
 }
 
-// --- 2) Create ZIP archive ---
+// --- 3) Create ZIP archive ---
 const zipFile = path.join(distRoot, `${modName}-v${version}.zip`);
 const output = fs.createWriteStream(zipFile);
 const archive = archiver("zip", { zlib: { level: 9 } });
