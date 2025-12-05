@@ -1,3 +1,19 @@
+# [skill-uptime-tracker-v1.5.0](https://github.com/thieleju/mhws-mods/compare/skill-uptime-tracker-v1.4.2...skill-uptime-tracker-v1.5.0) (2025-12-05)
+
+
+### Bug Fixes
+
+* **release:** update README links and include README in release assets ([0664bd0](https://github.com/thieleju/mhws-mods/commit/0664bd0cff8eb4ec945390c50a2d7070a9cedbf9))
+* **skill-uptime-tracker:** remove unnecessary resonance effect display ([712b196](https://github.com/thieleju/mhws-mods/commit/712b196e6db1d920472f53690e90897022de8439))
+
+
+### Features
+
+* **skill-uptime-tracker:** add auto_close and auto_open to configuration ([45d617a](https://github.com/thieleju/mhws-mods/commit/45d617a6dcd28303c8e1d76461953ff1f01a105c))
+* **skill-uptime-tracker:** add helper functions to open and close the main UI window ([41b7644](https://github.com/thieleju/mhws-mods/commit/41b7644f64489e0bed40f3ff0e1eb0f6672529ce))
+* **skill-uptime-tracker:** add hooks and UI checkbox for automatically opening and closing ([853105c](https://github.com/thieleju/mhws-mods/commit/853105cb9a6be765442cc146ed38c1b36f36f9cc))
+* **skill-uptime-tracker:** add quest end type definition ([4f8ebaf](https://github.com/thieleju/mhws-mods/commit/4f8ebaf248898c46c9190808ed8c6c8bca9b0245))
+
 # [skill-uptime-tracker-v1.4.2](https://github.com/thieleju/mhws-mods/compare/skill-uptime-tracker-v1.4.1...skill-uptime-tracker-v1.4.2) (2025-12-04)
 
 
