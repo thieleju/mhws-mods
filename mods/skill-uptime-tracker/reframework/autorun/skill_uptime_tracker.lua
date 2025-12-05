@@ -75,25 +75,24 @@ local SkillIDMax                      = TD_SkillEnum:get_field("MAX"):get_data()
 -- ============================================================================
 -- Configuration and State Management
 -- ============================================================================
-local config                          = {
-  openWindow = false,
-  strategyIndex = 1,
-  show = { skills = true, items = false, flags = false, weapons = false, movedamage = true, auto_close = false, auto_open = false },
+local config = {
+  open = false,
+  tables = { skills = true, items = false, flags = false, movedamage = false },
   columns = { primary = true, percent = true, active = true, state = true },
+  strategy = {
+    index = 1,
+  },
   debug = false,
   hideButtons = false,
+  autoClose = false,
+  autoOpen = false
 }
 
 -- Module namespace
-local SkillUptime                     = {
-  UI       = {
-    defaultFont = nil,
-    open = false,
-    tables = { Skills = true, Items = false, Flags = false, Weapons = false, MoveDamage = true },
-    columns = { Primary = true, Percent = true, Active = true, State = true },
-  },
+local SkillUptime = {
+  UI = {},
+  defaultFont = nil,
   Strategy = {
-    index = 1,
     defs = {
       { label = "In combat",       useHitsView = false, showBattleHeader = true,  accumulateTime = true },
       { label = "Hits (up/total)", useHitsView = true,  showBattleHeader = false, accumulateTime = false },
@@ -172,7 +171,6 @@ local SkillUptime                     = {
       KoukaDrinkG = 172,
     },
   },
-  Weapons  = { data = {}, timing_starts = {}, uptime = {}, hits_up = {} },
   -- Per-move damage tracker (player only, boss hits)
   Moves    = {
     damage = {},
@@ -231,6 +229,10 @@ local SkillUptime                     = {
 -- Initialization & Data Tables
 -- ============================================================================
 for i, s in ipairs(SkillUptime.Strategy.defs) do SkillUptime.Strategy.labels[i] = s.label end
+
+SkillUptime.Strategy.get_active = function()
+  return SkillUptime.Strategy.defs[config.strategy.index] or SkillUptime.Strategy.defs[1]
+end
 
 -- Singleton cache
 local _SINGLETON_CACHE = {}
@@ -526,64 +528,66 @@ SkillUptime.Skills.is_excluded_skill = function(skill_id)
   return skill_id == SkillUptime.Const.SEREGIOS_TENACITY_SKILL_ID or skill_id == 0
 end
 
-SkillUptime.Strategy.get_active = function()
-  return SkillUptime.Strategy.defs[SkillUptime.Strategy.index] or SkillUptime.Strategy.defs[1]
-end
-
 SkillUptime.UI.ensure_default_font = function()
-  if SkillUptime.UI.defaultFont ~= nil then return SkillUptime.UI.defaultFont end
+  if SkillUptime.defaultFont ~= nil then return SkillUptime.defaultFont end
   local size = (imgui.get_default_font_size and imgui.get_default_font_size()) or nil
   local font = nil
   if imgui.load_font then
-    -- nil path loads the default font at the requested size
     font = imgui.load_font(nil, size)
   end
-  SkillUptime.UI.defaultFont = font
-  return SkillUptime.UI.defaultFont
+  SkillUptime.defaultFont = font
+  return SkillUptime.defaultFont
 end
 
 SkillUptime.Config.save = function()
   if json and json.dump_file then json.dump_file(SkillUptime.Const.CONFIG_PATH, config) end
 end
 
-SkillUptime.Config.apply = function()
-  SkillUptime.Strategy.index = config.strategyIndex or SkillUptime.Strategy.index
-  SkillUptime.UI.tables.Skills = (config.show and config.show.skills) or SkillUptime.UI.tables.Skills
-  SkillUptime.UI.tables.Items = (config.show and config.show.items) or SkillUptime.UI.tables.Items
-  SkillUptime.UI.tables.Weapons = (config.show and config.show.weapons) or SkillUptime.UI.tables.Weapons
-  SkillUptime.UI.tables.Flags = (config.show and config.show.flags) or SkillUptime.UI.tables.Flags
-  SkillUptime.UI.tables.MoveDamage = (config.show and config.show.movedamage ~= false)
-  SkillUptime.UI.columns.Primary = (config.columns and config.columns.primary ~= false)
-  SkillUptime.UI.columns.Percent = (config.columns and config.columns.percent ~= false)
-  SkillUptime.UI.columns.Active = (config.columns and config.columns.active ~= false)
-  SkillUptime.UI.columns.State = (config.columns and config.columns.state ~= false)
-  SkillUptime.UI.open = (config.openWindow == true)
-end
-
 SkillUptime.Config.load = function()
   if not (json and json.load_file) then return end
   local loaded = json.load_file(SkillUptime.Const.CONFIG_PATH)
   if not loaded then return end
-  if type(loaded.openWindow) == "boolean" then config.openWindow = loaded.openWindow end
-  if type(loaded.strategyIndex) == "number" then config.strategyIndex = loaded.strategyIndex end
-  if type(loaded.show) == "table" then
-    config.show.skills = (loaded.show.skills ~= false)
-    config.show.items = (loaded.show.items == true)
-    config.show.weapons = (loaded.show.weapons == true)
-    config.show.flags = (loaded.show.flags == true)
-    config.show.movedamage = (loaded.show.movedamage ~= false)
+  
+  local function get_value(...)
+    for _, path in ipairs({...}) do
+      local value = loaded
+      for _, key in ipairs(path) do
+        if type(value) ~= "table" then break end
+        value = value[key]
+      end
+      if value ~= nil then return value end
+    end
+    return nil
   end
-  if type(loaded.columns) == "table" then
-    config.columns.primary = (loaded.columns.primary ~= false)
-    config.columns.percent = (loaded.columns.percent ~= false)
-    config.columns.active = (loaded.columns.active ~= false)
-    config.columns.state = (loaded.columns.state ~= false)
+
+  -- ensure backwards compatibility with old config keys
+  
+  local open = get_value({"open"}, {"openWindow"})
+  if type(open) == "boolean" then config.open = open end
+  
+  local tables = get_value({"tables"}, {"show"})
+  if type(tables) == "table" then
+    config.tables.skills = (tables.skills ~= false)
+    config.tables.items = (tables.items == true)
+    config.tables.flags = (tables.flags == true)
+    config.tables.movedamage = (tables.movedamage ~= false)
   end
+  
+  local columns = get_value({"columns"})
+  if type(columns) == "table" then
+    config.columns.primary = (columns.primary ~= false)
+    config.columns.percent = (columns.percent ~= false)
+    config.columns.active = (columns.active ~= false)
+    config.columns.state = (columns.state ~= false)
+  end
+  
+  local strategyIndex = get_value({"strategy", "index"}, {"strategyIndex"})
+  if type(strategyIndex) == "number" then config.strategy.index = strategyIndex end
+  
   if type(loaded.debug) == "boolean" then config.debug = loaded.debug end
   if type(loaded.hideButtons) == "boolean" then config.hideButtons = loaded.hideButtons end
-  -- transparency removed
-  -- Apply loaded config immediately to UI state
-  SkillUptime.Config.apply()
+  if type(loaded.autoClose) == "boolean" then config.autoClose = loaded.autoClose end
+  if type(loaded.autoOpen) == "boolean" then config.autoOpen = loaded.autoOpen end
 end
 
 SkillUptime.Core.registerHook = function(method, pre, post)
@@ -1112,12 +1116,6 @@ SkillUptime.Skills.poll_skill_uptime = function(in_battle, tnow)
   end
 end
 
--- Frenzy doesn't trigger beginSkill/endSkill hooks, so it needs special polling (DEPRECATED - now using polling for all skills)
-SkillUptime.Skills.tick_frenzy_time_uptime = function(in_battle, tnow)
-  -- This function is now deprecated as we poll all skills
-  -- Keeping for compatibility but it does nothing
-end
-
 SkillUptime.Items.ensure_item = function(name)
   local rec = SkillUptime.Items.data[name]
   if not rec then
@@ -1191,89 +1189,12 @@ SkillUptime.Items.update_items_and_frenzy = function(skl, status)
   end
 end
 
-SkillUptime.Weapons.get_hunter_character = function()
-  local pm = sdk.get_managed_singleton and sdk.get_managed_singleton("app.PlayerManager") or nil
-  if not pm then return nil end
-  local info = pm:getMasterPlayer(); if not info then return nil end
-  local chr = info:get_Character(); return chr
-end
-
-SkillUptime.Weapons.ensure_weapon_state = function(name, label)
-  local rec = SkillUptime.Weapons.data[name]
-  if not rec then
-    rec = { Name = name, Activated = false, Meter = nil, MeterLabel = label }
-    SkillUptime.Weapons.data[name] = rec
-  end
-  if label and rec.MeterLabel ~= label then rec.MeterLabel = label end
-  return rec
-end
-
-SkillUptime.Weapons.update_weapon_states = function()
-  local chr = SkillUptime.Weapons.get_hunter_character(); if not chr then return end
-  local okH, wpHdlr = pcall(function() return chr:get_WeaponHandling() end)
-  if not okH or not wpHdlr then return end
-  -- Only meaningful for Dual Blades (WeaponType 2). If not DB, clear states.
-  local okWT, wtype = pcall(function() return chr:get_WeaponType() end)
-  if not okWT or wtype ~= 2 then
-    for _, rec in pairs(SkillUptime.Weapons.data) do rec.Activated = false end
-    return
-  end
-  local okS, stamin = pcall(function() return chr:get_HunterStamina() end)
-  local staminaPct = nil
-  if okS and stamin then
-    local maxS = stamin:get_MaxStamina()
-    if maxS and maxS > 0 then staminaPct = (stamin:get_Stamina() or 0) / maxS end
-  end
-  local isDemon = false
-  local isArch = false
-  local gaugePct = nil
-  -- Direct field access as in dualblades_simple_overlay.lua
-  local okD, vD = pcall(function() return wpHdlr._IsKijinOn end); if okD then isDemon = vD and true or false end
-  local okA, vA = pcall(function() return wpHdlr._IsKijinEnhancement end); if okA then isArch = vA and true or false end
-  local okG, gaugeObj = pcall(function() return wpHdlr:get_field("<KijinGauge>k__BackingField") end)
-  if okG and gaugeObj and gaugeObj._Value ~= nil then
-    local gv = gaugeObj._Value
-    if type(gv) == "number" then gaugePct = gv end
-  end
-  local recD = SkillUptime.Weapons.ensure_weapon_state("Demon Mode", "Stamina")
-  recD.Activated = isDemon; recD.Meter = staminaPct
-  local recA = SkillUptime.Weapons.ensure_weapon_state("Archdemon", "Gauge")
-  recA.Activated = isArch; recA.Meter = gaugePct
-end
-
--- Helper function to open UI window
-local function openWindow()
-  SkillUptime.UI.open = true
-  config.openWindow = true
-  SkillUptime.Config.save()
-end
-
-local function autoOpenWindow()
-  if config.show.auto_open then
-    openWindow()
-  end
-end
-
--- Helper function to close UI window
-local function closeWindow()
-  SkillUptime.UI.open = false
-  config.openWindow = false
-  SkillUptime.Config.save()
-end
-
-local function autoCloseWindow()
-  if config.show.auto_close then
-    closeWindow()
-  end
-end
-
 -- ============================================================================
 -- Game Event Hooks
 -- ============================================================================
 
 -- Resonance tracking hooks
 -- Resonance is a set bonus skill that alternates between Near (Affinity boost) and Far (Attack boost)
--- These functions are called continuously while active, so we need to track state changes only
 
 -- Helper function to end all resonance states when switching types
 local function end_all_resonance_states()
@@ -1378,12 +1299,25 @@ SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Skills.uptime = {}; SkillUptime.Skills.running = {}; SkillUptime.Skills.timing_starts = {}; SkillUptime.Skills.hits_up = {}; SkillUptime.Skills.name_cache = {}
   SkillUptime.Items.uptime = {}; SkillUptime.Items.timing_starts = {}; SkillUptime.Items.data = {}; SkillUptime.Items.hits_up = {}
   SkillUptime.Flags.uptime = {}; SkillUptime.Flags.timing_starts = {}; SkillUptime.Flags.data = {}; SkillUptime.Flags.hits_up = {}
-  SkillUptime.Weapons.uptime = {}; SkillUptime.Weapons.timing_starts = {}; SkillUptime.Weapons.data = {}; SkillUptime.Weapons.hits_up = {}
   SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
   SkillUptime.Hits.total = 0
+
+  -- Auto-close config on quest start if enabled in settings
+  if config.autoClose then
+    config.open = false
+  end
+
+  SkillUptime.Config.save()
   SkillUptime.Util.logDebug("Quest enter: cleared trackers and counters")
-  autoCloseWindow()
+end
+
+-- Auto-open config on quest end if enabled in settings
+SkillUptime.Hooks.onQuestEnd = function()
+  if config.autoOpen then
+    config.open = true
+    SkillUptime.Config.save()
+  end
 end
 
 -- Manual reset for session stats
@@ -1399,7 +1333,7 @@ SkillUptime.Hooks.reset_all = function()
   for _, rec in pairs(SkillUptime.Status and SkillUptime.Status.SkillData or {}) do
     rec.Activated = false; rec.Timer = 0
   end
-  SkillUptime.Hits.total = 0; SkillUptime.Skills.hits_up = {}; SkillUptime.Items.hits_up = {}; SkillUptime.Weapons.hits_up = {}; SkillUptime.Flags.hits_up = {}
+  SkillUptime.Hits.total = 0; SkillUptime.Skills.hits_up = {}; SkillUptime.Items.hits_up = {}; SkillUptime.Flags.hits_up = {}
   SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
   SkillUptime.Util.logDebug("Manual reset requested")
@@ -1477,10 +1411,16 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
         end
       end
       if mv.wpTypes[atkIndex] == nil then
-        local okChr, chr = pcall(function() return SkillUptime.Weapons.get_hunter_character() end)
-        if okChr and chr and chr.get_WeaponType then
-          local okWT, wtype = pcall(function() return chr:get_WeaponType() end)
-          if okWT then mv.wpTypes[atkIndex] = wtype end
+        local pm = SkillUptime.Core.GetSingleton("app.PlayerManager")
+        if pm then
+          local okPlayer, playerInfo = pcall(function() return pm:getMasterPlayer() end)
+          if okPlayer and playerInfo then
+            local okChr, chr = pcall(function() return playerInfo:get_Character() end)
+            if okChr and chr and chr.get_WeaponType then
+              local okWT, wtype = pcall(function() return chr:get_WeaponType() end)
+              if okWT then mv.wpTypes[atkIndex] = wtype end
+            end
+          end
         end
       end
       if mv.names[atkIndex] == nil then
@@ -1507,12 +1447,6 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   for name, rec in pairs(SkillUptime.Items.data or {}) do
     if rec and rec.Activated then
       SkillUptime.Items.hits_up[name] = (SkillUptime.Items.hits_up[name] or 0) + 1
-    end
-  end
-  -- Attribute to active weapon states
-  for name, rec in pairs(SkillUptime.Weapons.data or {}) do
-    if rec and rec.Activated then
-      SkillUptime.Weapons.hits_up[name] = (SkillUptime.Weapons.hits_up[name] or 0) + 1
     end
   end
   -- Attribute to active status flags
@@ -1547,12 +1481,14 @@ end
 -- UI Rendering
 -- ============================================================================
 SkillUptime.UI.draw = function()
-  -- Title and flags
+  if not config.open then return end
+  
   local __as = SkillUptime.Strategy.get_active()
   local __title = "Skill Uptime Tracker: " .. ((__as and __as.label) or "")
   local window_open = imgui.begin_window(__title, true, 64)
   if not window_open then
-    SkillUptime.UI.open = false; config.openWindow = false; SkillUptime.Config.save()
+    config.open = false
+    SkillUptime.Config.save()
     imgui.end_window()
     return
   end
@@ -1585,7 +1521,7 @@ SkillUptime.UI.draw = function()
   end
 
   -- Skills
-  if SkillUptime.UI.tables.Skills then
+  if config.tables.skills then
     local id_set = {}
     local useHits = (strategy.useHitsView == true)
     if useHits then
@@ -1604,21 +1540,21 @@ SkillUptime.UI.draw = function()
     imgui.text_colored("> Skills (" .. #ids .. ")", SkillUptime.Const.COLOR_BLUE)
     if #ids > 0 then
       local colCount = 1
-      if SkillUptime.UI.columns.Primary then colCount = colCount + 1 end
-      if SkillUptime.UI.columns.Percent then colCount = colCount + 1 end
-      if SkillUptime.UI.columns.Active then colCount = colCount + 1 end
-      if SkillUptime.UI.columns.State then colCount = colCount + 1 end
+      if config.columns.primary then colCount = colCount + 1 end
+      if config.columns.percent then colCount = colCount + 1 end
+      if config.columns.active then colCount = colCount + 1 end
+      if config.columns.state then colCount = colCount + 1 end
       if imgui.begin_table("skill_uptime_table", colCount, tableFlags) then
         imgui.table_setup_column("Name")
         if useHits then
-          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Hits (up/total)") end
-          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Hit Uptime (%)") end
+          if config.columns.primary then imgui.table_setup_column("Hits (up/total)") end
+          if config.columns.percent then imgui.table_setup_column("Hit Uptime (%)") end
         else
-          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Uptime") end
-          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Uptime (%)") end
+          if config.columns.primary then imgui.table_setup_column("Uptime") end
+          if config.columns.percent then imgui.table_setup_column("Uptime (%)") end
         end
-        if SkillUptime.UI.columns.Active then imgui.table_setup_column("Active Time") end
-        if SkillUptime.UI.columns.State then imgui.table_setup_column("State") end
+        if config.columns.active then imgui.table_setup_column("Active Time") end
+        if config.columns.state then imgui.table_setup_column("State") end
         imgui.table_headers_row()
         for _, id in ipairs(ids) do
           local base = (not SkillUptime.Skills.is_excluded_skill(id)) and (SkillUptime.Skills.uptime[id] or 0.0) or 0.0
@@ -1639,30 +1575,30 @@ SkillUptime.UI.draw = function()
               local up = SkillUptime.Skills.hits_up[id] or 0
               local totHits = SkillUptime.Hits.total or 0
               local hitPct = (totHits > 0) and (up / totHits * 100.0) or 0.0
-              if SkillUptime.UI.columns.Primary then
+              if config.columns.primary then
                 imgui.table_set_column_index(col);
                 if totHits > 0 then imgui.text(string.format("%d/%d", up, totHits)) else imgui.text("—") end
                 col = col + 1
               end
-              if SkillUptime.UI.columns.Percent then
+              if config.columns.percent then
                 imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
               end
             else
               local pct = (elapsed > 0) and (total / elapsed * 100.0) or 0.0
-              if SkillUptime.UI.columns.Primary then
+              if config.columns.primary then
                 imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_mss_hh(total)); col = col + 1
               end
-              if SkillUptime.UI.columns.Percent then
+              if config.columns.percent then
                 imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", pct)); col = col + 1
               end
             end
             local s = SkillUptime.Status.SkillData[id]
-            if SkillUptime.UI.columns.Active then
+            if config.columns.active then
               imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_time_pair(s and s.Timer,
                 s and s.MaxTimer)); col =
                   col + 1
             end
-            if SkillUptime.UI.columns.State then
+            if config.columns.state then
               imgui.table_set_column_index(col); if s and s.Activated then
                 imgui.text_colored("active", SkillUptime.Const.COLOR_GREEN)
               else
@@ -1678,7 +1614,7 @@ SkillUptime.UI.draw = function()
   end
 
   -- Items
-  if SkillUptime.UI.tables.Items then
+  if config.tables.items then
     -- Build rows for items that have been used (have uptime, hits, or currently active)
     local itemRows = {}
     local useHits = (strategy.useHitsView == true)
@@ -1712,21 +1648,21 @@ SkillUptime.UI.draw = function()
 
     if #itemRows > 0 then
       local colCount = 1
-      if SkillUptime.UI.columns.Primary then colCount = colCount + 1 end
-      if SkillUptime.UI.columns.Percent then colCount = colCount + 1 end
-      if SkillUptime.UI.columns.Active then colCount = colCount + 1 end
-      if SkillUptime.UI.columns.State then colCount = colCount + 1 end
+      if config.columns.primary then colCount = colCount + 1 end
+      if config.columns.percent then colCount = colCount + 1 end
+      if config.columns.active then colCount = colCount + 1 end
+      if config.columns.state then colCount = colCount + 1 end
       if imgui.begin_table("item_uptime_table", colCount, tableFlags) then
         imgui.table_setup_column("Name")
         if useHits then
-          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Hits (up/total)") end
-          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Hit Uptime (%)") end
+          if config.columns.primary then imgui.table_setup_column("Hits (up/total)") end
+          if config.columns.percent then imgui.table_setup_column("Hit Uptime (%)") end
         else
-          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Uptime") end
-          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Uptime (%)") end
+          if config.columns.primary then imgui.table_setup_column("Uptime") end
+          if config.columns.percent then imgui.table_setup_column("Uptime (%)") end
         end
-        if SkillUptime.UI.columns.Active then imgui.table_setup_column("Active Time") end
-        if SkillUptime.UI.columns.State then imgui.table_setup_column("State") end
+        if config.columns.active then imgui.table_setup_column("Active Time") end
+        if config.columns.state then imgui.table_setup_column("State") end
         imgui.table_headers_row()
         for _, row in ipairs(itemRows) do
           imgui.table_next_row()
@@ -1736,28 +1672,28 @@ SkillUptime.UI.draw = function()
             local up = SkillUptime.Items.hits_up[row.key] or 0
             local totHits = SkillUptime.Hits.total or 0
             local hitPct = (totHits > 0) and (up / totHits * 100.0) or 0.0
-            if SkillUptime.UI.columns.Primary then
+            if config.columns.primary then
               imgui.table_set_column_index(col);
               if totHits > 0 then imgui.text(string.format("%d/%d", up, totHits)) else imgui.text("—") end
               col = col + 1
             end
-            if SkillUptime.UI.columns.Percent then
+            if config.columns.percent then
               imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
             end
           else
             local pct = (elapsed > 0) and (row.total / elapsed * 100.0) or 0.0
-            if SkillUptime.UI.columns.Primary then
+            if config.columns.primary then
               imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_mss_hh(row.total)); col = col + 1
             end
-            if SkillUptime.UI.columns.Percent then
+            if config.columns.percent then
               imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", pct)); col = col + 1
             end
           end
-          if SkillUptime.UI.columns.Active then
+          if config.columns.active then
             imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_time_pair(row.rec and row.rec.Timer,
               row.rec and row.rec.MaxTimer)); col = col + 1
           end
-          if SkillUptime.UI.columns.State then
+          if config.columns.state then
             imgui.table_set_column_index(col); if row.active then
               imgui.text_colored("active",
                 SkillUptime.Const.COLOR_GREEN)
@@ -1775,7 +1711,7 @@ SkillUptime.UI.draw = function()
   imgui.spacing()
 
   -- Flags
-  if SkillUptime.UI.tables.Flags then
+  if config.tables.flags then
     local flagRows = SkillUptime.Core.build_rows(SkillUptime.Flags.data, SkillUptime.Flags.uptime,
       SkillUptime.Flags.timing_starts, epsilon, function(fid, rec) return rec.Name or ("FLAG " .. tostring(fid)) end)
     table.sort(flagRows, function(a, b) return a.key < b.key end)
@@ -1783,21 +1719,21 @@ SkillUptime.UI.draw = function()
     if #flagRows > 0 then
       local useHits = (strategy.useHitsView == true)
       local colCount3 = 1
-      if SkillUptime.UI.columns.Primary then colCount3 = colCount3 + 1 end
-      if SkillUptime.UI.columns.Percent then colCount3 = colCount3 + 1 end
-      if SkillUptime.UI.columns.Active then colCount3 = colCount3 + 1 end
-      if SkillUptime.UI.columns.State then colCount3 = colCount3 + 1 end
+      if config.columns.primary then colCount3 = colCount3 + 1 end
+      if config.columns.percent then colCount3 = colCount3 + 1 end
+      if config.columns.active then colCount3 = colCount3 + 1 end
+      if config.columns.state then colCount3 = colCount3 + 1 end
       if imgui.begin_table("flag_uptime_table", colCount3, tableFlags) then
         imgui.table_setup_column("Name")
         if useHits then
-          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Hits (up/total)") end
-          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Hit Uptime (%)") end
+          if config.columns.primary then imgui.table_setup_column("Hits (up/total)") end
+          if config.columns.percent then imgui.table_setup_column("Hit Uptime (%)") end
         else
-          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Uptime") end
-          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Uptime (%)") end
+          if config.columns.primary then imgui.table_setup_column("Uptime") end
+          if config.columns.percent then imgui.table_setup_column("Uptime (%)") end
         end
-        if SkillUptime.UI.columns.Active then imgui.table_setup_column("Active Time") end
-        if SkillUptime.UI.columns.State then imgui.table_setup_column("State") end
+        if config.columns.active then imgui.table_setup_column("Active Time") end
+        if config.columns.state then imgui.table_setup_column("State") end
         imgui.table_headers_row()
         for _, row in ipairs(flagRows) do
           imgui.table_next_row()
@@ -1807,30 +1743,30 @@ SkillUptime.UI.draw = function()
             local up = SkillUptime.Flags.hits_up[row.key] or 0
             local totHits = SkillUptime.Hits.total or 0
             local hitPct = (totHits > 0) and (up / totHits * 100.0) or 0.0
-            if SkillUptime.UI.columns.Primary then
+            if config.columns.primary then
               imgui.table_set_column_index(col); if totHits > 0 then
                 imgui.text(string.format("%d/%d", up, totHits))
               else
                 imgui.text("—")
               end; col = col + 1
             end
-            if SkillUptime.UI.columns.Percent then
+            if config.columns.percent then
               imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
             end
           else
             local pct = (elapsed > 0) and (row.total / elapsed * 100.0) or 0.0
-            if SkillUptime.UI.columns.Primary then
+            if config.columns.primary then
               imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_mss_hh(row.total)); col = col + 1
             end
-            if SkillUptime.UI.columns.Percent then
+            if config.columns.percent then
               imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", pct)); col = col + 1
             end
           end
-          if SkillUptime.UI.columns.Active then
+          if config.columns.active then
             imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_time_pair(row.rec and row.rec.Timer,
               row.rec and row.rec.MaxTimer)); col = col + 1
           end
-          if SkillUptime.UI.columns.State then
+          if config.columns.state then
             imgui.table_set_column_index(col); if row.active then
               imgui.text_colored("active",
                 SkillUptime.Const.COLOR_GREEN)
@@ -1844,84 +1780,9 @@ SkillUptime.UI.draw = function()
       end
     end
   end
-
-  -- Weapons
-  if SkillUptime.UI.tables.Weapons then
-    local rows = SkillUptime.Core.build_rows(SkillUptime.Weapons.data, SkillUptime.Weapons.uptime,
-      SkillUptime.Weapons.timing_starts, epsilon, function(key, rec) return rec.Name or tostring(key) end)
-    table.sort(rows, function(a, b) return a.name < b.name end)
-    imgui.text_colored("> Weapon States (" .. #rows .. ")", SkillUptime.Const.COLOR_BLUE)
-    if #rows > 0 then
-      local useHits = (strategy.useHitsView == true)
-      local colCount2 = 1
-      if SkillUptime.UI.columns.Primary then colCount2 = colCount2 + 1 end
-      if SkillUptime.UI.columns.Percent then colCount2 = colCount2 + 1 end
-      if SkillUptime.UI.columns.Active then colCount2 = colCount2 + 1 end
-      if SkillUptime.UI.columns.State then colCount2 = colCount2 + 1 end
-      if imgui.begin_table("weapon_states_table", colCount2, tableFlags) then
-        imgui.table_setup_column("Name")
-        if useHits then
-          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Hits (up/total)") end
-          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Hit Uptime (%)") end
-        else
-          if SkillUptime.UI.columns.Primary then imgui.table_setup_column("Uptime") end
-          if SkillUptime.UI.columns.Percent then imgui.table_setup_column("Uptime (%)") end
-        end
-        if SkillUptime.UI.columns.Active then imgui.table_setup_column(useHits and "Active Time" or "Active Meter") end
-        if SkillUptime.UI.columns.State then imgui.table_setup_column("State") end
-        imgui.table_headers_row()
-        for _, row in ipairs(rows) do
-          imgui.table_next_row()
-          local col = 0
-          imgui.table_set_column_index(col); imgui.text(row.name); col = col + 1
-          if useHits then
-            local up = SkillUptime.Weapons.hits_up[row.key] or 0
-            local totHits = SkillUptime.Hits.total or 0
-            local hitPct = (totHits > 0) and (up / totHits * 100.0) or 0.0
-            if SkillUptime.UI.columns.Primary then
-              imgui.table_set_column_index(col); if totHits > 0 then
-                imgui.text(string.format("%d/%d", up, totHits))
-              else
-                imgui.text("—")
-              end; col = col + 1
-            end
-            if SkillUptime.UI.columns.Percent then
-              imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
-            end
-            if SkillUptime.UI.columns.Active then
-              imgui.table_set_column_index(col); imgui.text("—"); col = col + 1
-            end
-          else
-            local pct = (elapsed > 0) and (row.total / elapsed * 100.0) or 0.0
-            local meterStr = SkillUptime.Util.fmt_pct_label(row.rec and row.rec.MeterLabel, row.rec and row.rec.Meter)
-            if SkillUptime.UI.columns.Primary then
-              imgui.table_set_column_index(col); imgui.text(SkillUptime.Util.fmt_mss_hh(row.total)); col = col + 1
-            end
-            if SkillUptime.UI.columns.Percent then
-              imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", pct)); col = col + 1
-            end
-            if SkillUptime.UI.columns.Active then
-              imgui.table_set_column_index(col); imgui.text(meterStr); col = col + 1
-            end
-          end
-          if SkillUptime.UI.columns.State then
-            imgui.table_set_column_index(col); if row.active then
-              imgui.text_colored("active",
-                SkillUptime.Const.COLOR_GREEN)
-            else
-              imgui.text_colored("inactive", SkillUptime.Const.COLOR_RED)
-            end; col =
-                col + 1
-          end
-        end
-        imgui.end_table()
-      end
-    end
-  end
-
 
   -- Move Damage
-  if SkillUptime.UI.tables.MoveDamage then
+  if config.tables.movedamage then
     local mv = SkillUptime.Moves
     local totalDmg = (mv and mv.total) or 0
     local moveCount = 0
@@ -2059,71 +1920,66 @@ re.on_draw_ui(function()
     -- Tracking Strategy dropdown (reduced width)
     imgui.push_item_width(180)
     local changed
-    changed, SkillUptime.Strategy.index = imgui.combo("Tracking Strategy", SkillUptime.Strategy.index or 1,
+    changed, config.strategy.index = imgui.combo("Tracking Strategy", config.strategy.index or 1,
       SkillUptime.Strategy.labels)
     imgui.pop_item_width()
     if changed then
-      config.strategyIndex = SkillUptime.Strategy.index; SkillUptime.Config.save()
+      SkillUptime.Config.save()
     end
     -- (Currently only two options; reserved for future strategies.)
     local toggled
-    toggled, SkillUptime.UI.tables.Skills = imgui.checkbox("Skills", SkillUptime.UI.tables.Skills)
-    if toggled then
-      config.show.skills = SkillUptime.UI.tables.Skills; SkillUptime.Config.save()
-    end
-    toggled, SkillUptime.UI.tables.Items = imgui.checkbox("Item Buffs", SkillUptime.UI.tables.Items)
-    if toggled then
-      config.show.items = SkillUptime.UI.tables.Items; SkillUptime.Config.save()
-    end
-    toggled, config.show.auto_close = imgui.checkbox("Automatically Close On Quest Enter", config.show.auto_close)
+    toggled, config.tables.skills = imgui.checkbox("Skills", config.tables.skills)
     if toggled then
       SkillUptime.Config.save()
     end
-    toggled, config.show.auto_open = imgui.checkbox("Automatically Open On Quest End", config.show.auto_open)
+    toggled, config.tables.items = imgui.checkbox("Item Buffs", config.tables.items)
     if toggled then
       SkillUptime.Config.save()
     end
-    -- Direct toggles with (experimental) tag
-    toggled, SkillUptime.UI.tables.Flags = imgui.checkbox("Status Flags", SkillUptime.UI.tables.Flags)
+    toggled, config.tables.movedamage = imgui.checkbox("Move Damage", config.tables.movedamage)
     if toggled then
-      config.show.flags = SkillUptime.UI.tables.Flags; SkillUptime.Config.save()
+      SkillUptime.Config.save()
+    end
+    toggled, config.tables.flags = imgui.checkbox("Status Flags", config.tables.flags)
+    if toggled then
+      SkillUptime.Config.save()
     end
     imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
-    toggled, SkillUptime.UI.tables.Weapons = imgui.checkbox("Weapon States (only DBs atm)",
-      SkillUptime.UI.tables.Weapons)
-    if toggled then
-      config.show.weapons = SkillUptime.UI.tables.Weapons; SkillUptime.Config.save()
-    end
-    imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
-    toggled, SkillUptime.UI.tables.MoveDamage = imgui.checkbox("Move Damage", SkillUptime.UI.tables.MoveDamage)
-    if toggled then
-      config.show.movedamage = SkillUptime.UI.tables.MoveDamage; SkillUptime.Config.save()
-    end
-    imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
-    -- Display Settings
-    if imgui.tree_node("Display Settings") then
-      local c
-      c, SkillUptime.UI.columns.Primary = imgui.checkbox("Show Uptime/Hits column", SkillUptime.UI.columns.Primary)
-      if c then
-        config.columns.primary = SkillUptime.UI.columns.Primary; SkillUptime.Config.save()
+    -- General Settings
+    if imgui.tree_node("General Settings") then
+      local autoOpenChanged, autoOpen = imgui.checkbox("Open Window on Quest End", config.autoOpen == true)
+      if autoOpenChanged then
+        config.autoOpen = autoOpen and true or false; SkillUptime.Config.save()
       end
-      c, SkillUptime.UI.columns.Percent = imgui.checkbox("Show Uptime %", SkillUptime.UI.columns.Percent)
-      if c then
-        config.columns.percent = SkillUptime.UI.columns.Percent; SkillUptime.Config.save()
-      end
-      c, SkillUptime.UI.columns.Active = imgui.checkbox("Show Active Time", SkillUptime.UI.columns.Active)
-      if c then
-        config.columns.active = SkillUptime.UI.columns.Active; SkillUptime.Config.save()
-      end
-      c, SkillUptime.UI.columns.State = imgui.checkbox("Show State", SkillUptime.UI.columns.State)
-      if c then
-        config.columns.state = SkillUptime.UI.columns.State; SkillUptime.Config.save()
+      local autoCloseChanged, autoClose = imgui.checkbox("Close Window on Quest Start", config.autoClose == true)
+      if autoCloseChanged then
+        config.autoClose = autoClose and true or false; SkillUptime.Config.save()
       end
       local hbChanged, hb = imgui.checkbox("Hide Reset Button", config.hideButtons == true)
       if hbChanged then
         config.hideButtons = hb and true or false; SkillUptime.Config.save()
       end
-      -- transparency controls removed
+      imgui.tree_pop()
+    end
+    -- Table Column Settings
+    if imgui.tree_node("Table Column Settings") then
+      local c
+      c, config.columns.primary = imgui.checkbox("Show Uptime/Hits column", config.columns.primary)
+      if c then
+        SkillUptime.Config.save()
+      end
+      c, config.columns.percent = imgui.checkbox("Show Uptime %", config.columns.percent)
+      if c then
+        SkillUptime.Config.save()
+      end
+      c, config.columns.active = imgui.checkbox("Show Active Time", config.columns.active)
+      if c then
+        SkillUptime.Config.save()
+      end
+      c, config.columns.state = imgui.checkbox("Show State", config.columns.state)
+      if c then
+        SkillUptime.Config.save()
+      end
       imgui.tree_pop()
     end
     -- Developer Options
@@ -2135,9 +1991,10 @@ re.on_draw_ui(function()
       end
       imgui.tree_pop()
     end
-    local buttonText = SkillUptime.UI.open and "Close Skill Uptime Overview" or "Show Skill Uptime Overview"
+    local buttonText = config.open and "Close Skill Uptime Overview" or "Show Skill Uptime Overview"
     if imgui.button(buttonText) then
-      SkillUptime.UI.open = not SkillUptime.UI.open; config.openWindow = SkillUptime.UI.open; SkillUptime.Config.save()
+      config.open = not config.open
+      SkillUptime.Config.save()
     end
     imgui.same_line()
     if imgui.button("Reset Uptime") then
@@ -2164,22 +2021,18 @@ end)
 -- Update Timer values for skills tracked via hooks
 local function update_tracker_state()
   SkillUptime.Core.tick_battle()
-  SkillUptime.Skills.update_active_skills() -- Poll all skills from game state
-  SkillUptime.Weapons.update_weapon_states()
+  SkillUptime.Skills.update_active_skills()
   SkillUptime.Core.tick_status_flags()
 end
 
 
 -- Helper function to accumulate uptime for time-based strategies
 local function accumulate_time_based_uptime(in_battle, tnow)
-  -- All skills are now tracked via polling (not hooks)
   SkillUptime.Skills.poll_skill_uptime(in_battle, tnow)
   SkillUptime.Core.accumulate_uptime(SkillUptime.Items.data, SkillUptime.Items.timing_starts, SkillUptime.Items.uptime,
     in_battle, tnow)
   SkillUptime.Core.accumulate_uptime(SkillUptime.Flags.data, SkillUptime.Flags.timing_starts, SkillUptime.Flags.uptime,
     in_battle, tnow)
-  SkillUptime.Core.accumulate_uptime(SkillUptime.Weapons.data, SkillUptime.Weapons.timing_starts,
-    SkillUptime.Weapons.uptime, in_battle, tnow)
 end
 
 -- ============================================================================
@@ -2196,7 +2049,7 @@ re.on_frame(function()
   end
 
   -- Draw UI
-  if SkillUptime.UI.open then
+  if config.open then
     SkillUptime.UI.draw()
   end
 end)
@@ -2208,11 +2061,10 @@ SkillUptime.Core.registerHook(FN_QuestEnter, SkillUptime.Hooks.onQuestEnter, nil
 SkillUptime.Core.registerHook(FN_SetStatusBuff, SkillUptime.Hooks.onSetStatusBuff, nil)
 SkillUptime.Core.registerHook(FN_HunterHitPost, SkillUptime.Hooks.onHunterHitPost, nil)
 SkillUptime.Core.registerHook(FN_SkillUpdaterLateUpdate, SkillUptime.Hooks.onSkillUpdaterLateUpdate, nil)
+SkillUptime.Core.registerHook(FN_QuestEnd, SkillUptime.Hooks.onQuestEnd, nil)
 
 -- Resonance tracking hooks
 SkillUptime.Core.registerHook(FN_BeginResonanceNear, SkillUptime.Hooks.onResonanceNear, nil)
 SkillUptime.Core.registerHook(FN_BeginResonanceFar, SkillUptime.Hooks.onResonanceFar, nil)
 SkillUptime.Core.registerHook(FN_BeginResonanceNearCriticalUp, SkillUptime.Hooks.onResonanceNearCriticalUp, nil)
 SkillUptime.Core.registerHook(FN_BeginResonanceFarAttackUp, SkillUptime.Hooks.onResonanceFarAttackUp, nil)
-
-SkillUptime.Core.registerHook(FN_QuestEnd, autoOpenWindow, nil)
