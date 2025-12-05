@@ -16,6 +16,7 @@ local TD_GuiMessage                   = sdk.find_type_definition("via.gui.messag
 local TD_SkillEnum                    = sdk.find_type_definition("app.HunterDef.Skill")
 local TD_SkillParamInfo               = sdk.find_type_definition("app.cHunterSkillParamInfo")
 local TD_QuestPlaying                 = sdk.find_type_definition("app.cQuestPlaying")
+local TD_QuestResult                  = sdk.find_type_definition("app.cQuestResult")
 local TD_App                          = sdk.find_type_definition("via.Application")
 local TD_HunterCharacter              = sdk.find_type_definition("app.HunterCharacter")
 local TD_EnemyCharacter               = sdk.find_type_definition("app.EnemyCharacter")
@@ -43,6 +44,7 @@ local FN_ConvertSkillToGroup          =
 local FN_GetMsg                       = TD_GuiMessage:get_method("get(System.Guid)") or nil
 local FN_GetMsgLang                   = TD_GuiMessage:get_method("get(System.Guid, via.Language)") or nil
 local FN_QuestEnter                   = TD_QuestPlaying:get_method("enter()") or nil
+local FN_QuestEnd                     = TD_QuestResult:get_method("enter()") or nil
 local FN_Now                          = TD_App:get_method("get_UpTimeSecond") or nil
 local FN_SetStatusBuff                =
     TD_HunterCharacter:get_method("setStatusBuff(app.HunterDef.STATUS_FLAG, System.Single, System.Single)") or nil
@@ -76,7 +78,7 @@ local SkillIDMax                      = TD_SkillEnum:get_field("MAX"):get_data()
 local config                          = {
   openWindow = false,
   strategyIndex = 1,
-  show = { skills = true, items = false, flags = false, weapons = false, movedamage = true },
+  show = { skills = true, items = false, flags = false, weapons = false, movedamage = true, auto_close = false, auto_open = false },
   columns = { primary = true, percent = true, active = true, state = true },
   debug = false,
   hideButtons = false,
@@ -1239,6 +1241,32 @@ SkillUptime.Weapons.update_weapon_states = function()
   recA.Activated = isArch; recA.Meter = gaugePct
 end
 
+-- Helper function to open UI window
+local function openWindow()
+  SkillUptime.UI.open = true
+  config.openWindow = true
+  SkillUptime.Config.save()
+end
+
+local function autoOpenWindow()
+  if config.show.auto_open then
+    openWindow()
+  end
+end
+
+-- Helper function to close UI window
+local function closeWindow()
+  SkillUptime.UI.open = false
+  config.openWindow = false
+  SkillUptime.Config.save()
+end
+
+local function autoCloseWindow()
+  if config.show.auto_close then
+    closeWindow()
+  end
+end
+
 -- ============================================================================
 -- Game Event Hooks
 -- ============================================================================
@@ -1355,6 +1383,7 @@ SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
   SkillUptime.Hits.total = 0
   SkillUptime.Util.logDebug("Quest enter: cleared trackers and counters")
+  autoCloseWindow()
 end
 
 -- Manual reset for session stats
@@ -2042,11 +2071,19 @@ re.on_draw_ui(function()
     if toggled then
       config.show.skills = SkillUptime.UI.tables.Skills; SkillUptime.Config.save()
     end
-    -- Direct toggles with (experimental) tag
     toggled, SkillUptime.UI.tables.Items = imgui.checkbox("Item Buffs", SkillUptime.UI.tables.Items)
     if toggled then
       config.show.items = SkillUptime.UI.tables.Items; SkillUptime.Config.save()
     end
+    toggled, config.show.auto_close = imgui.checkbox("Automatically Close On Quest Enter", config.show.auto_close)
+    if toggled then
+      SkillUptime.Config.save()
+    end
+    toggled, config.show.auto_open = imgui.checkbox("Automatically Open On Quest End", config.show.auto_open)
+    if toggled then
+      SkillUptime.Config.save()
+    end
+    -- Direct toggles with (experimental) tag
     toggled, SkillUptime.UI.tables.Flags = imgui.checkbox("Status Flags", SkillUptime.UI.tables.Flags)
     if toggled then
       config.show.flags = SkillUptime.UI.tables.Flags; SkillUptime.Config.save()
@@ -2177,3 +2214,5 @@ SkillUptime.Core.registerHook(FN_BeginResonanceNear, SkillUptime.Hooks.onResonan
 SkillUptime.Core.registerHook(FN_BeginResonanceFar, SkillUptime.Hooks.onResonanceFar, nil)
 SkillUptime.Core.registerHook(FN_BeginResonanceNearCriticalUp, SkillUptime.Hooks.onResonanceNearCriticalUp, nil)
 SkillUptime.Core.registerHook(FN_BeginResonanceFarAttackUp, SkillUptime.Hooks.onResonanceFarAttackUp, nil)
+
+SkillUptime.Core.registerHook(FN_QuestEnd, autoOpenWindow, nil)
