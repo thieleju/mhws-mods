@@ -21,10 +21,10 @@
       "@semantic-release/git",
       {
         "assets": [
-          "CHANGELOG.md",
-          "package.json",
-          "modinfo.ini",
-          "../../README.md"
+          "mods/skill-uptime-tracker/CHANGELOG.md",
+          "mods/skill-uptime-tracker/package.json",
+          "mods/skill-uptime-tracker/modinfo.ini",
+          "README.md"
         ],
         "message": "chore(skill-uptime-tracker): release v${nextRelease.version} [skip ci]"
       }
