@@ -720,10 +720,8 @@ SkillUptime.Skills.resolve_name = function(skill_id, level)
   if not skill_id or skill_id < 0 then return "[INVALID_SKILL]" end
 
   -- Custom names for Resonance tracking (custom skill IDs) - check BEFORE SkillIDMax validation
-  if skill_id == 999001 then return "Resonance Near" end
-  if skill_id == 999002 then return "Resonance Far" end
-  if skill_id == 999003 then return "Resonance Near+Critical" end
-  if skill_id == 999004 then return "Resonance Far+Attack" end
+  if skill_id == 999003 then return "Resonance Near (Affinity)" end
+  if skill_id == 999004 then return "Resonance Far (Attack)" end
 
   if SkillIDMax and skill_id >= SkillIDMax then return "[INVALID_SKILL]" end
 
@@ -1198,7 +1196,7 @@ end
 
 -- Helper function to end all resonance states when switching types
 local function end_all_resonance_states()
-  local resonance_ids = { 999001, 999002, 999003, 999004 }
+  local resonance_ids = { 999003, 999004 }
   local now = SkillUptime.Core.now()
 
   for _, skill_id in ipairs(resonance_ids) do
@@ -1223,40 +1221,6 @@ local function end_all_resonance_states()
       end
       skillRec.Timer = 0
     end
-  end
-end
-
-SkillUptime.Hooks.onResonanceNear = function(args)
-  local skill_id = 999001 -- Custom ID for Resonance Near
-  -- Only activate if not already running
-  if not SkillUptime.Skills.running[skill_id] then
-    end_all_resonance_states() -- End other resonance states first
-    local now = SkillUptime.Core.now()
-    SkillUptime.Skills.running[skill_id] = true
-    SkillUptime.Skills.timing_starts[skill_id] = now
-    local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
-    if skillRec then
-      skillRec.Activated = true
-      skillRec.ActivationTime = now
-    end
-    SkillUptime.Util.logDebug("Resonance Near activated (Affinity boost)")
-  end
-end
-
-SkillUptime.Hooks.onResonanceFar = function(args)
-  local skill_id = 999002 -- Custom ID for Resonance Far
-  -- Only activate if not already running
-  if not SkillUptime.Skills.running[skill_id] then
-    end_all_resonance_states() -- End other resonance states first
-    local now = SkillUptime.Core.now()
-    SkillUptime.Skills.running[skill_id] = true
-    SkillUptime.Skills.timing_starts[skill_id] = now
-    local skillRec = SkillUptime.Skills.ensure_skill(nil, skill_id)
-    if skillRec then
-      skillRec.Activated = true
-      skillRec.ActivationTime = now
-    end
-    SkillUptime.Util.logDebug("Resonance Far activated (Attack boost)")
   end
 end
 
@@ -2064,7 +2028,5 @@ SkillUptime.Core.registerHook(FN_SkillUpdaterLateUpdate, SkillUptime.Hooks.onSki
 SkillUptime.Core.registerHook(FN_QuestEnd, SkillUptime.Hooks.onQuestEnd, nil)
 
 -- Resonance tracking hooks
-SkillUptime.Core.registerHook(FN_BeginResonanceNear, SkillUptime.Hooks.onResonanceNear, nil)
-SkillUptime.Core.registerHook(FN_BeginResonanceFar, SkillUptime.Hooks.onResonanceFar, nil)
 SkillUptime.Core.registerHook(FN_BeginResonanceNearCriticalUp, SkillUptime.Hooks.onResonanceNearCriticalUp, nil)
 SkillUptime.Core.registerHook(FN_BeginResonanceFarAttackUp, SkillUptime.Hooks.onResonanceFarAttackUp, nil)
