@@ -6,6 +6,19 @@
 
 const fs = require("fs");
 const path = require("path");
+const { execSync } = require("child_process");
+
+function findGitRoot() {
+  try {
+    const gitRoot = execSync("git rev-parse --show-toplevel", {
+      encoding: "utf8",
+    }).trim();
+    return gitRoot;
+  } catch (e) {
+    // Fallback to current directory if not in a git repo
+    return process.cwd();
+  }
+}
 
 function parseIni(content) {
   const result = {};
@@ -73,7 +86,7 @@ function replaceSection(readme, newSection) {
 }
 
 function main() {
-  const repoRoot = process.cwd();
+  const repoRoot = findGitRoot();
   const modsDir = path.join(repoRoot, "mods");
   const readmePath = path.join(repoRoot, "README.md");
   const repo = process.env.GITHUB_REPOSITORY || "thieleju/mhws-mods";
