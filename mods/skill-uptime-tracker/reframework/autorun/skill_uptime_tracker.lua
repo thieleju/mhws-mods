@@ -85,7 +85,8 @@ local config = {
   debug = false,
   hideButtons = false,
   autoClose = false,
-  autoOpen = false
+  autoOpen = false,
+  hideWithREFrameworkUI = false
 }
 
 -- Module namespace
@@ -588,6 +589,7 @@ SkillUptime.Config.load = function()
   if type(loaded.hideButtons) == "boolean" then config.hideButtons = loaded.hideButtons end
   if type(loaded.autoClose) == "boolean" then config.autoClose = loaded.autoClose end
   if type(loaded.autoOpen) == "boolean" then config.autoOpen = loaded.autoOpen end
+  if type(loaded.hideWithREFrameworkUI) == "boolean" then config.hideWithREFrameworkUI = loaded.hideWithREFrameworkUI end
 end
 
 SkillUptime.Core.registerHook = function(method, pre, post)
@@ -1446,6 +1448,7 @@ end
 -- ============================================================================
 SkillUptime.UI.draw = function()
   if not config.open then return end
+  if config.hideWithREFrameworkUI and not reframework:is_drawing_ui() then return end
   
   local __as = SkillUptime.Strategy.get_active()
   local __title = "Skill Uptime Tracker: " .. ((__as and __as.label) or "")
@@ -1918,6 +1921,10 @@ re.on_draw_ui(function()
       local autoCloseChanged, autoClose = imgui.checkbox("Close Window on Quest Start", config.autoClose == true)
       if autoCloseChanged then
         config.autoClose = autoClose and true or false; SkillUptime.Config.save()
+      end
+      local hideWithREFrameworkUIChanged, hideWithREFrameworkUI = imgui.checkbox("Hide with REFramwork UI", config.hideWithREFrameworkUI == true)
+      if hideWithREFrameworkUIChanged then
+        config.hideWithREFrameworkUI = hideWithREFrameworkUI and true or false; SkillUptime.Config.save()
       end
       local hbChanged, hb = imgui.checkbox("Hide Reset Button", config.hideButtons == true)
       if hbChanged then
