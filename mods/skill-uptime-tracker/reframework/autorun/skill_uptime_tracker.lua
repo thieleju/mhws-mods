@@ -25,6 +25,13 @@ local TD_SkillParamInfo_cInfo         = sdk.find_type_definition("app.cHunterSki
 local TD_HunterSkillUpdater           = sdk.find_type_definition("app.HunterSkillUpdater")
 local TD_ItemDef                      = sdk.find_type_definition("app.ItemDef")
 local TD_ActionGuideID                = sdk.find_type_definition("app.ActionGuideID")
+local TD_cEnemyStockDamage            = sdk.find_type_definition("app.cEnemyStockDamage")
+local TD_DamageGui                    = sdk.find_type_definition("app.GUI020020")
+local TD_GUI_State                    = sdk.find_type_definition("app.GUI020020.State")
+local TD_GUI_DamageType               = sdk.find_type_definition("app.GUI020020.DAMAGE_TYPE")
+local TD_ConditionSkillStabbing       = sdk.find_type_definition("app.cEnemyBadConditionSkillStabbing")
+local TD_ConditionSkillRyuki          = sdk.find_type_definition("app.cEnemyBadConditionSkillRyuki")
+local TD_ConditionBlast               = sdk.find_type_definition("app.cEnemyBadConditionBlast")
 
 -- ============================================================================
 -- Type Constants
@@ -59,6 +66,16 @@ local FN_BeginResonanceNear           = TD_SkillParamInfo:get_method("beginReson
 local FN_BeginResonanceFar            = TD_SkillParamInfo:get_method("beginResonanceFar") or nil
 local FN_BeginResonanceNearCriticalUp = TD_SkillParamInfo:get_method("beginResonanceNearCriticalUp") or nil
 local FN_BeginResonanceFarAttackUp    = TD_SkillParamInfo:get_method("beginResonanceFarAttackUp") or nil
+
+-- Extra Damage tracking methods
+local FN_RequestDamageGUI             = TD_cEnemyStockDamage:get_method("requestDamageGUI(via.vec3, System.Single, app.GUI020020.State, System.Boolean, System.Nullable`1<app.TARGET_ACCESS_KEY>, System.Boolean, System.Boolean, app.GUI020020.CRITICAL_STATE, app.GUI020020.DAMAGE_TYPE, app.HitDef.COLLAB_DAMAGE_UI_TYPE)")
+local FN_BeginScorchingHeat           = TD_SkillParamInfo:get_method("beginScorchingHeat") or nil -- scorcher tracking method
+local FN_ApplayViolent                = TD_SkillParamInfo:get_method("applayViolent") or nil -- Bad Blood tracking method
+local FN_BeginRyukiExplosion          = TD_SkillParamInfo:get_method("beginRyukiExplosion") or nil -- Whiteflame Torrent tracking method
+local FN_BeginSkillDischarge          = TD_SkillParamInfo:get_method("beginSkillDischarge") or nil -- Azure Bolt tracking method
+local FN_SkillStabbingOnActivate      = TD_ConditionSkillStabbing:get_method("onActivate") or nil -- flayer tracking method
+local FN_SkillRyukiOnActivate         = TD_ConditionSkillRyuki:get_method("onActivate") or nil -- Convert Element tracking method
+local FN_BlastOnActivate              = TD_ConditionBlast:get_method("onActivate") or nil
 
 -- ============================================================================
 -- Field Definitions
@@ -202,6 +219,8 @@ local SkillUptime = {
       [12] = "HBG",
       [13] = "LBG",
       [14] = "Tz",
+      [98] = "STATUS",
+      [99] = "EXTRA"
     },
     maxHit = {}, -- moveKey -> highest single hit damage
   },
@@ -218,13 +237,243 @@ local SkillUptime = {
     MOVE_ACTIVE_GAP = 2.0,       -- seconds; gap threshold to close an activity segment for a move
     MOVE_TABLE_MAX_HEIGHT = 260, -- pixels; max height for Move Damage table before scrolling
     EPSILON = 0.0005,
+    -- Event Definitions that later get utilized with bit masks
+    --   - Events and Groups are both tables
+    --   - Groups may have a "meta" key, events must not
+    --   - Event metadata is the table itself, it may be empty
+    --   - A group's keys must all be ALL_CAPS, except "meta"
+    EVENT_DEFS = {
+      EXTRAHIT_PROCS = {
+        SCORCHER_PROCCED = { skillID = 999005 },
+        BAD_BLOOD_PROCCED = { skillID = 999006 },
+        WHITEFLAME_TORRENT_PROCCED = { skillID = 999007 },
+        AZURE_BOLT_PROCCED = { skillID = 999008 },
+      },
+      STATUS_PROCS = {
+        FLAYER_PROC_PROCCED = { skillID = 999009 },
+        CONVERT_ELEMENT_PROC_PROCCED = { skillID = 999010 },
+        BLAST_PROCCED = { skillID = 999011}
+      },
+    },
   },
   -- Ensure sub-namespaces exist before assigning functions
   Util     = {},
   Config   = {},
   Core     = {},
   Hooks    = {},
+  Event   = {},
 }
+
+-- ============================================================================
+-- Event System
+-- ============================================================================
+
+-- closure
+(function()
+
+  -- ==========================================================================
+  -- Event Initialization
+  -- ==========================================================================
+
+  local Events = {}
+  local Groups = {}
+  local Meta = {}
+  local nextBit = 1
+  
+  local EventListeners = {}
+  local nextListenerId = 1
+  
+  local EventToName = {}
+  local GroupToName = {}
+  
+  -- Internal state for active events
+  local EventState = 0
+
+  -- defines a new event, ensuring uniqueness
+  local function defineEvent(name, metadata)
+    if not Events[name] then
+      local bit = nextBit
+      nextBit = nextBit << 1
+
+      Meta[name] = metadata or {}
+      Events[name] = bit
+      EventToName[bit] = name
+    end
+    return Events[name]
+  end
+
+  local function isCapsKey(k)
+    return type(k) == "string" and k:match("^[A-Z0-9_-]+$") ~= nil
+  end
+
+  local function isGroupTable(t)
+    for k, v in pairs(t) do
+      if k ~= "meta" then
+        -- if table has lowercase keys, its not a group
+        if not isCapsKey(k) then return false end
+        -- if table values aren't sub tables like sub groups or events, it's not a group
+        if type(v) ~= "table" then return false end
+      end
+    end  
+
+    -- if table is not empty it's a group, since an empty table is an event
+    return next(t) ~= nil
+  end
+
+  -- recursively process event group definitions
+  -- groups can contain both events and sub groups
+  local function processGroup(groupName, groupDef)
+    local mask = 0
+
+    Meta[groupName] = groupDef.meta or {}
+
+    for key, value in pairs(groupDef) do
+      if key ~= "meta" then
+        if isGroupTable(value) then
+          mask = mask | processGroup(key, value)
+        else
+          mask = mask | defineEvent(key, value)
+        end
+      end
+    end
+
+    Groups[groupName] = mask
+    GroupToName[mask] = groupName
+
+    return mask
+  end
+
+  -- INITIALIZATION: process the top level group and name it "EVENTS"
+  processGroup("EVENTS", SkillUptime.Const.EVENT_DEFS)
+
+  -- ==========================================================================
+  -- Event Helper Functions
+  -- ==========================================================================
+
+  -- private
+  local function nameToMask(name)
+    local bit = Events[name]
+    local mask = Groups[name]
+
+    if bit or mask then return bit or mask end
+
+    if not bit then
+      SkillUptime.Util.logError("Unknown Event: " .. tostring(eventName))
+    elseif not mask then
+      SkillUptime.Util.logError("Unknown Event Group: " .. tostring(groupName))
+    end
+
+    -- returns a "neutral" 0 value instead of nil if nothing matches.
+    return 0
+  end
+
+  local function namesToMask(...)
+    local mask = 0
+    for _, name in ipairs({...}) do
+      mask = mask | nameToMask(name)
+    end
+    return mask
+  end
+
+  local function maskToEventBits(mask)
+    local events = {}
+    local bit = 1
+
+    while mask ~= 0 do
+      if (mask & bit) ~= 0 then
+        events[#events+1] = bit
+        mask = mask & ~bit -- clear this bit
+      end
+      bit = bit << 1 -- check next bit
+    end
+
+    return events
+  end
+
+  -- public
+  SkillUptime.Event.resetAll = function() EventState = 0 end
+  SkillUptime.Event.snapshot = function() return EventState end
+  SkillUptime.Event.restore = function(mask) EventState = mask or 0 end
+
+  SkillUptime.Event.set = function(name, ...)
+    local mask = namesToMask(name, ...)
+    EventState = EventState | mask
+
+    -- trigger listeners
+    for _, listener in pairs(EventListeners) do
+      if (listener.mask & mask) ~= 0 then
+        listener.callback(name, Meta[name], mask)
+      end
+    end
+  end
+
+  SkillUptime.Event.clear = function(name, ...)
+    local mask = namesToMask(name, ...)
+    EventState = EventState & (~mask)
+  end
+
+  SkillUptime.Event.isActive = function(name, ...)
+    local mask = namesToMask(name, ...)
+    return (EventState & mask) ~= 0
+  end
+
+  -- alternate name, use depends on which is more clear when using them.
+  SkillUptime.Event.isAnyActive = SkillUptime.Event.isActive
+
+  SkillUptime.Event.areAllActive = function(name, ...)
+    local mask = namesToMask(name, ...)
+    return (EventState & mask) == mask
+  end
+
+  SkillUptime.Event.getMeta = function(name)
+    return Meta[name]
+  end
+
+  SkillUptime.Event.on = function(nameOrTableOfNames, callback)
+    local id = nextListenerId
+    nextListenerId = nextListenerId + 1
+    local mask = 0
+
+    if type(nameOrTableOfNames) == "string" then
+      mask = nameToMask(nameOrTableOfNames)
+    elseif type(nameOrTableOfNames) == "table" then
+      mask = namesToMask(table.unpack(nameOrTableOfNames))
+    end
+
+    EventListeners[id] = { mask = mask, callback = callback }
+
+    return id
+  end
+
+  SkillUptime.Event.off = function(id)
+    EventListeners[id] = nil
+  end
+
+  SkillUptime.Event.toMask = function(name, ...)
+    return namesToMask(name, ...)
+  end
+
+  -- can be used together with snapshot to log all active events
+  --   print(table.concat(SkillUptime.Event.maskToEvents(SkillUptime.Event.snapshot), "\n"))
+  SkillUptime.Event.maskToEvents = function(mask)
+    local eventNames = {}
+    for _, eventbit in ipairs(maskToEventBits(mask)) do
+      eventNames[#eventNames+1] = SkillUptime.Event.toString(eventbit)
+    end
+    return eventNames
+  end
+
+  SkillUptime.Event.toString = function(mask)
+    local name = EventToName[mask] or GroupToName[mask]
+    
+    if not name then
+      SkillUptime.Util.logError("Mask: " .. tostring(mask) .. " does not exist as a event or group")
+    end
+
+    return name
+  end
+
+end)()
 
 -- ============================================================================
 -- Initialization & Data Tables
@@ -718,12 +967,50 @@ SkillUptime.Util.table_length = function(tbl)
   return count
 end
 
+SkillUptime.Util.to_uint32 = function(value)
+  return sdk.to_int64(value) & 0xFFFFFFFF
+end
+
+SkillUptime.Util.getEnumMap = (function()
+  local enumCache = {}
+
+  return (function(enumTypeDef)
+    if enumCache[enumTypeDef] then return table.unpack(enumCache[enumTypeDef]) end
+
+    local fields = enumTypeDef:get_fields()
+    local valToName, nameToVal = {}, {}
+
+    for _, field in ipairs(fields) do
+      if field:is_static() then
+        local name = field:get_name()
+        local raw_value = field:get_data(nil)
+        valToName[raw_value] = name
+        nameToVal[name] = raw_value
+      end
+    end
+
+    enumCache[enumTypeDef] = { valToName, nameToVal }
+
+    return valToName, nameToVal
+  end)
+end)()
+
+
 SkillUptime.Skills.resolve_name = function(skill_id, level)
   if not skill_id or skill_id < 0 then return "[INVALID_SKILL]" end
 
   -- Custom names for Resonance tracking (custom skill IDs) - check BEFORE SkillIDMax validation
   if skill_id == 999003 then return "Resonance Near (Affinity)" end
   if skill_id == 999004 then return "Resonance Far (Attack)" end
+
+  -- Custom names for extra damage skills (custom skill IDs)
+  if skill_id == 999005 then return "Scorcher" end
+  if skill_id == 999006 then return "Bad Blood" end
+  if skill_id == 999007 then return "Whiteflame Torrent" end
+  if skill_id == 999008 then return "Azure Bolt" end
+  if skill_id == 999009 then return "Flayer Proc" end
+  if skill_id == 999010 then return "Convert Element Proc" end
+  if skill_id == 999011 then return "Blast" end
 
   if SkillIDMax and skill_id >= SkillIDMax then return "[INVALID_SKILL]" end
 
@@ -1260,6 +1547,112 @@ SkillUptime.Hooks.onResonanceFarAttackUp = function(args)
   end
 end
 
+SkillUptime.Hooks.onBeginScorchingHeat = function(args)
+  SkillUptime.Event.set("SCORCHER_PROCCED")
+end
+
+SkillUptime.Hooks.onApplayViolent = function(args)
+  SkillUptime.Event.set("BAD_BLOOD_PROCCED")
+end
+
+SkillUptime.Hooks.onBeginRyukiExplosion = function(args)
+  SkillUptime.Event.set("WHITEFLAME_TORRENT_PROCCED")
+end
+
+SkillUptime.Hooks.onBeginSkillDischarge = function(args)
+  SkillUptime.Event.set("AZURE_BOLT_PROCCED")
+end
+
+SkillUptime.Hooks.onSkillStabbingOnActivate = function(args)
+  SkillUptime.Event.set("FLAYER_PROC_PROCCED")
+end
+
+SkillUptime.Hooks.onSkillRyukiOnActivate = function(args)
+  SkillUptime.Event.set("CONVERT_ELEMENT_PROC_PROCCED")
+end
+
+SkillUptime.Hooks.onBlastOnActivate = function(args)
+  SkillUptime.Event.set("BLAST_PROCCED")
+end
+
+SkillUptime.Hooks.onRequestDamageGUI = (function()
+  local Event = SkillUptime.Event
+
+  local function registerDamage(damage, weaponID, moveID, moveName)
+    local mv = SkillUptime.Moves
+    local atkIndex = weaponID .. ":" .. moveID
+
+    mv.hits[atkIndex] = (mv.hits[atkIndex] or 0) + 1
+    mv.damage[atkIndex] = (mv.damage[atkIndex] or 0) + damage
+    if mv.maxHit[atkIndex] == nil or damage > mv.maxHit[atkIndex] then mv.maxHit[atkIndex] = damage end
+    if mv.wpTypes[atkIndex] == nil then mv.wpTypes[atkIndex] = weaponID end
+    if mv.names[atkIndex] == nil then mv.names[atkIndex] = moveName end
+  end
+
+  local function handleExtraHitProc(damage)
+    local weaponID = 99 -- EXTRA
+    local activeEventsMask = Event.snapshot() & Event.toMask("EXTRAHIT_PROCS")
+    local activeEvents = Event.maskToEvents(activeEventsMask)
+    local name = ""
+
+    for i, event in ipairs(activeEvents) do
+      -- build the combined name, example: Scorcher + Bad Blood
+      if i ~= 1 then name = name .. " + " end
+      local meta = Event.getMeta(event)
+      name = name .. SkillUptime.Skills.resolve_name(meta.skillID)
+
+      -- register the damage under the constructed combined name
+      if next(activeEvents, i) == nil then
+        registerDamage(damage, weaponID, activeEventsMask, name)
+      end
+    end
+
+    -- also add to "All sources combined"
+    registerDamage(damage, weaponID, 0, "All Sources Combined")
+
+    Event.clear("EXTRAHIT_PROCS")
+  end
+
+  local function handleStatusProc(damage)
+    local weaponID = 98 -- STATUS
+    local activeEventsMask = Event.snapshot() & Event.toMask("STATUS_PROCS")
+    -- take the first active event
+    local procEvent = table.unpack(Event.maskToEvents(activeEventsMask))
+    local skillID = Event.getMeta(procEvent).skillID
+    local moveName = SkillUptime.Skills.resolve_name(skillID)
+
+    registerDamage(damage, weaponID, skillID, moveName)
+
+    Event.clear(procEvent)
+  end
+
+  -- args:
+  -- 3: unk1 [via.vec3]
+  -- 4: damage [System.Single]
+  -- 5: state [app.GUI020020.State]
+  -- 6: unk2 [System.Boolean]
+  -- 7: targetAccessKey [System.Nullable`1<app.TARGET_ACCESS_KEY>]
+  -- 8: unk3 [System.Boolean]
+  -- 9: unk4 [System.Boolean]
+  -- 10: criticalState [app.GUI020020.CRITICAL_STATE]
+  -- 11: damageType [app.GUI020020.DAMAGE_TYPE]
+  -- 12: collabUIType [app.HitDef.COLLAB_DAMAGE_UI_TYPE]
+  return function(args)
+    local stateValToName = SkillUptime.Util.getEnumMap(TD_GUI_State)
+    local state = stateValToName[SkillUptime.Util.to_uint32(args[5])]
+    local isExtraHit = state == "EXTRAHIT"
+    local isStatusProc = state ~= "EXTRAHIT" and SkillUptime.Event.isAnyActive("STATUS_PROCS")
+    
+    if not (isExtraHit or isStatusProc) then return end
+    
+    local damage = sdk.to_float(args[4])
+    SkillUptime.Util.logDebug("damage: " .. math.floor(damage))
+    
+    if isExtraHit   then handleExtraHitProc(damage) end
+    if isStatusProc then handleStatusProc(damage) end
+  end
+end)()
+
 SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Battle.active = false; SkillUptime.Battle.start = 0.0; SkillUptime.Battle.total = 0.0
   SkillUptime.Skills.uptime = {}; SkillUptime.Skills.running = {}; SkillUptime.Skills.timing_starts = {}; SkillUptime.Skills.hits_up = {}; SkillUptime.Skills.name_cache = {}
@@ -1268,6 +1661,9 @@ SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
   SkillUptime.Hits.total = 0
+
+  -- reset events
+  SkillUptime.Event.clear("EXTRAHIT_PROCS", "STATUS_PROCS")
 
   -- Auto-close config on quest start if enabled in settings
   if config.autoClose then
@@ -2026,6 +2422,18 @@ re.on_frame(function()
 end)
 
 -- ============================================================================
+-- Event callback registration
+-- ============================================================================
+
+SkillUptime.Event.on({ "EXTRAHIT_PROCS", "STATUS_PROCS" }, function(eventName, eventMeta)
+  local sid = eventMeta.skillID
+  local name = SkillUptime.Skills.resolve_name(sid)
+
+  SkillUptime.Skills.hits_up[sid] = (SkillUptime.Skills.hits_up[sid] or 0) + 1
+  SkillUptime.Util.logDebug(name .. " extra damage triggered")
+end)
+
+-- ============================================================================
 -- Hook Registration
 -- ============================================================================
 SkillUptime.Core.registerHook(FN_QuestEnter, SkillUptime.Hooks.onQuestEnter, nil)
@@ -2037,3 +2445,13 @@ SkillUptime.Core.registerHook(FN_QuestEnd, SkillUptime.Hooks.onQuestEnd, nil)
 -- Resonance tracking hooks
 SkillUptime.Core.registerHook(FN_BeginResonanceNearCriticalUp, SkillUptime.Hooks.onResonanceNearCriticalUp, nil)
 SkillUptime.Core.registerHook(FN_BeginResonanceFarAttackUp, SkillUptime.Hooks.onResonanceFarAttackUp, nil)
+
+-- extra damage tracking hooks
+SkillUptime.Core.registerHook(FN_RequestDamageGUI, SkillUptime.Hooks.onRequestDamageGUI, nil)
+SkillUptime.Core.registerHook(FN_BeginScorchingHeat, SkillUptime.Hooks.onBeginScorchingHeat, nil)
+SkillUptime.Core.registerHook(FN_ApplayViolent, SkillUptime.Hooks.onApplayViolent, nil)
+SkillUptime.Core.registerHook(FN_BeginRyukiExplosion, SkillUptime.Hooks.onBeginRyukiExplosion, nil)
+SkillUptime.Core.registerHook(FN_BeginSkillDischarge, SkillUptime.Hooks.onBeginSkillDischarge, nil)
+SkillUptime.Core.registerHook(FN_SkillStabbingOnActivate, SkillUptime.Hooks.onSkillStabbingOnActivate, nil)
+SkillUptime.Core.registerHook(FN_SkillRyukiOnActivate, SkillUptime.Hooks.onSkillRyukiOnActivate, nil)
+SkillUptime.Core.registerHook(FN_BlastOnActivate, SkillUptime.Hooks.onBlastOnActivate, nil)
