@@ -8,6 +8,52 @@
 ---@diagnostic disable: undefined-global, undefined-doc-name, undefined-field
 
 -- ============================================================================
+-- Lua Helpers
+-- ============================================================================
+-- Simple lua functions that extend the base toolset and are agnostic to the project itself.
+-- These do not go under SkillUptime.Util as this makes them less convenient and they are project agnostic anyway.
+
+local function ivalues(t)
+  local i = 0
+  local function iter(t)
+    i = i + 1
+    return t[i]
+  end
+  return iter, t, 0
+end
+
+local function values(t)
+  local k = nil
+  local function iter(t)
+    local v = nil
+    k, v = next(t, k)
+    return v
+  end
+  return iter, t, nil
+end
+
+--[[ use: 
+  local table = {1,2,3}
+  local sum = reduce({ ivalues(table) }, function(a, b) return a + b end)
+  print(sum) -- 6
+]]
+local function reduce(iterTriple, init, func)
+  if func == nil then func, init = init, nil end  -- shift args if init not provided
+
+  local iter, state, control = iterTriple[1], iterTriple[2], iterTriple[3]
+  local acc, first = init, true 
+  for v1, v2, v3, v4, v5 in iter, state, control do
+    if first and init == nil then                 -- first element becomes initial value
+      acc, first = v1, false
+    else
+      acc = func(acc, v1, v2, v3, v4, v5)         -- accumulate
+    end
+  end
+
+  return acc
+end
+
+-- ============================================================================
 -- Type Definitions
 -- ============================================================================
 local TD_MessageUtil                  = sdk.find_type_definition("app.MessageUtil")
@@ -323,20 +369,14 @@ local SkillUptime = {
   -- recursively process event group definitions
   -- groups can contain both events and sub groups
   local function processGroup(groupName, groupDef)
-    local mask = 0
+
+    local mask = reduce({pairs(groupDef)}, 0, function(mask, key, value)
+      if key == "meta" then return mask end
+      if isGroupTable(value) then return mask | processGroup(key, value) end
+      return mask | defineEvent(key, value)        
+    end)
 
     Meta[groupName] = groupDef.meta or {}
-
-    for key, value in pairs(groupDef) do
-      if key ~= "meta" then
-        if isGroupTable(value) then
-          mask = mask | processGroup(key, value)
-        else
-          mask = mask | defineEvent(key, value)
-        end
-      end
-    end
-
     Groups[groupName] = mask
     GroupToName[mask] = groupName
 
@@ -368,11 +408,7 @@ local SkillUptime = {
   end
 
   local function namesToMask(...)
-    local mask = 0
-    for _, name in ipairs({...}) do
-      mask = mask | nameToMask(name)
-    end
-    return mask
+    return reduce({ivalues({...})}, 0, function(mask, name) return mask | nameToMask(name) end)
   end
 
   local function maskToEventBits(mask)
@@ -400,7 +436,7 @@ local SkillUptime = {
     EventState = EventState | mask
 
     -- trigger listeners
-    for _, listener in pairs(EventListeners) do
+    for listener in values(EventListeners) do
       if (listener.mask & mask) ~= 0 then
         listener.callback(name, Meta[name], mask)
       end
@@ -432,13 +468,11 @@ local SkillUptime = {
   SkillUptime.Event.on = function(nameOrTableOfNames, callback)
     local id = nextListenerId
     nextListenerId = nextListenerId + 1
-    local mask = 0
 
-    if type(nameOrTableOfNames) == "string" then
-      mask = nameToMask(nameOrTableOfNames)
-    elseif type(nameOrTableOfNames) == "table" then
-      mask = namesToMask(table.unpack(nameOrTableOfNames))
-    end
+    local mask = (function()
+      if type(nameOrTableOfNames) == "string" then return nameToMask(nameOrTableOfNames) end
+      if type(nameOrTableOfNames) == "table" then return namesToMask(table.unpack(nameOrTableOfNames)) end
+    end)() or 0
 
     EventListeners[id] = { mask = mask, callback = callback }
 
@@ -457,9 +491,7 @@ local SkillUptime = {
   --   print(table.concat(SkillUptime.Event.maskToEvents(SkillUptime.Event.snapshot), "\n"))
   SkillUptime.Event.maskToEvents = function(mask)
     local eventNames = {}
-    for _, eventbit in ipairs(maskToEventBits(mask)) do
-      eventNames[#eventNames+1] = SkillUptime.Event.toString(eventbit)
-    end
+    for i, bit in ipairs(maskToEventBits(mask)) do eventNames[i] = SkillUptime.Event.toString(bit) end
     return eventNames
   end
 
