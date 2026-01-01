@@ -1580,18 +1580,30 @@ SkillUptime.Hooks.onResonanceFarAttackUp = function(args)
 end
 
 SkillUptime.Hooks.onBeginScorchingHeat = function(args)
+  local this = sdk.to_managed_object(args[2])
+  if not this._IsMaster then return end
+
   SkillUptime.Event.set("SCORCHER_PROCCED")
 end
 
 SkillUptime.Hooks.onApplayViolent = function(args)
+  local this = sdk.to_managed_object(args[2])
+  if not this._IsMaster then return end
+  
   SkillUptime.Event.set("BAD_BLOOD_PROCCED")
 end
 
 SkillUptime.Hooks.onBeginRyukiExplosion = function(args)
+  local this = sdk.to_managed_object(args[2])
+  if not this._IsMaster then return end
+
   SkillUptime.Event.set("WHITEFLAME_TORRENT_PROCCED")
 end
 
 SkillUptime.Hooks.onBeginSkillDischarge = function(args)
+  local this = sdk.to_managed_object(args[2])
+  if not this._IsMaster then return end
+
   SkillUptime.Event.set("AZURE_BOLT_PROCCED")
 end
 
