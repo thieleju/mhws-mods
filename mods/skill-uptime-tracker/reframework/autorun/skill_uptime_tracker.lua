@@ -75,7 +75,7 @@ local FN_BeginRyukiExplosion          = TD_SkillParamInfo:get_method("beginRyuki
 local FN_BeginSkillDischarge          = TD_SkillParamInfo:get_method("beginSkillDischarge") or nil -- Azure Bolt tracking method
 local FN_SkillStabbingOnActivate      = TD_ConditionSkillStabbing:get_method("onActivate") or nil -- flayer tracking method
 local FN_SkillRyukiOnActivate         = TD_ConditionSkillRyuki:get_method("onActivate") or nil -- Convert Element tracking method
-local FN_BlastOnActivate              = TD_ConditionBlast:get_method("onActivate") or nil
+local FN_BlastOnActivate              = TD_ConditionBlast:get_method("onActivate") or nil -- Blast explosion tracking method
 
 -- ============================================================================
 -- Field Definitions
@@ -132,7 +132,7 @@ local SkillUptime = {
       "_RyukiInfo",               -- Convert Element
       "_MusclemanInfo",           -- Strongman
       "_BarbarianInfo",           -- Barbaric Feast
-      "_PowerAwakeInfo",          -- Power Awakening
+      "_PowerAwakeInfo",          -- Latent Power
       "_RyunyuInfo",              -- Dragon Milk Activation
       "_ContinuousAttackInfo",    -- Continuous Attack
       "_GuardianAreaInfo",        -- Guardian Area
@@ -148,7 +148,7 @@ local SkillUptime = {
       "_BegindAttackInfo",        -- Rush Attack
       "_YellInfo",                -- Yell
       "_TechnicalAttack_Info",    -- Technical Attack
-      "_DischargeInfo",           -- Discharge
+      "_DischargeInfo",           -- Leviathan's Fury/Azure Bolt
       "_IamCoalMinerInfo",        -- Coal Miner
       "_CaptureMasterInfo",       -- Capture Master
       "_HagitoriMasterInfo",      -- Hagitori Master
