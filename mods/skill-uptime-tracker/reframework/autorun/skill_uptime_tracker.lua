@@ -270,6 +270,11 @@ local SkillUptime = {
     },
     maxHit = {}, -- moveKey -> highest single hit damage
   },
+  ExtraHits = { 
+    damage = {}, -- eventMask -> damage
+    hits = {}, -- eventMask -> hits
+    average = {}, -- eventMask -> average (only has extra hits that weren't combined)
+  },
   Flags    = { names = {}, data = {}, timing_starts = {}, uptime = {}, hits_up = {}, lastTick = nil },
   Hits     = { total = 0 },
   Const    = {
@@ -290,10 +295,10 @@ local SkillUptime = {
     --   - A group's keys must all be ALL_CAPS, except "meta"
     EVENT_DEFS = {
       EXTRAHIT_PROCS = {
-        SCORCHER_PROCCED = { skillID = 999005 },
-        BAD_BLOOD_PROCCED = { skillID = 999006 },
-        WHITEFLAME_TORRENT_PROCCED = { skillID = 999007 },
-        AZURE_BOLT_PROCCED = { skillID = 999008 },
+        SCORCHER_PROCCED = { skillID = 999005, avg = 30 },
+        BAD_BLOOD_PROCCED = { skillID = 999006, avg = 20 },
+        WHITEFLAME_TORRENT_PROCCED = { skillID = 999007, avg = 60 },
+        AZURE_BOLT_PROCCED = { skillID = 999008, avg = 100 },
       },
       STATUS_PROCS = {
         FLAYER_PROC_PROCCED = { skillID = 999009 },
@@ -456,6 +461,12 @@ local SkillUptime = {
   -- alternate name, use depends on which is more clear when using them.
   SkillUptime.Event.isAnyActive = SkillUptime.Event.isActive
 
+  SkillUptime.Event.areMultipleActive = function(name, ...)
+    local mask = namesToMask(name, ...)
+    local activeBits = EventState & mask
+    return (activeBits & (activeBits - 1)) ~= 0
+  end
+
   SkillUptime.Event.areAllActive = function(name, ...)
     local mask = namesToMask(name, ...)
     return (EventState & mask) == mask
@@ -487,6 +498,8 @@ local SkillUptime = {
     return namesToMask(name, ...)
   end
 
+  SkillUptime.Event.maskToEventBits = maskToEventBits
+
   -- can be used together with snapshot to log all active events
   --   print(table.concat(SkillUptime.Event.maskToEvents(SkillUptime.Event.snapshot), "\n"))
   SkillUptime.Event.maskToEvents = function(mask)
@@ -503,6 +516,12 @@ local SkillUptime = {
     end
 
     return name
+  end
+
+  -- name lets you filter the result list. name can be an event or group
+  SkillUptime.Event.getActiveEvents = function(name, ...)
+    local mask = namesToMask(name, ...)
+    return SkillUptime.Event.maskToEvents(EventState & mask)
   end
 
 end)()
@@ -639,6 +658,12 @@ local FLAGS_NAME_MAP   = {
   [115] = "Icon Max",
   [116] = "Max",
 }
+
+-- populate extra hit default average damage
+for event in ivalues(SkillUptime.Event.maskToEvents(SkillUptime.Event.toMask("EXTRAHIT_PROCS"))) do
+  local idx = SkillUptime.Event.toMask(event)
+  SkillUptime.ExtraHits.average[idx] = SkillUptime.Event.getMeta(event).avg
+end
 
 -- ============================================================================
 -- Utility Functions
@@ -1621,51 +1646,107 @@ end
 
 SkillUptime.Hooks.onRequestDamageGUI = (function()
   local Event = SkillUptime.Event
+  local Skills = SkillUptime.Skills
+  local mv = SkillUptime.Moves
+  local ExHits = SkillUptime.ExtraHits
 
-  local function registerDamage(damage, weaponID, moveID, moveName)
-    local mv = SkillUptime.Moves
-    local atkIndex = weaponID .. ":" .. moveID
-
-    mv.hits[atkIndex] = (mv.hits[atkIndex] or 0) + 1
-    mv.damage[atkIndex] = (mv.damage[atkIndex] or 0) + damage
-    if mv.maxHit[atkIndex] == nil or damage > mv.maxHit[atkIndex] then mv.maxHit[atkIndex] = damage end
+  local function moveRegister(weaponID, skillID)
+    local atkIndex = weaponID .. ":" .. skillID
     if mv.wpTypes[atkIndex] == nil then mv.wpTypes[atkIndex] = weaponID end
-    if mv.names[atkIndex] == nil then mv.names[atkIndex] = moveName end
+    if mv.names[atkIndex] == nil then mv.names[atkIndex] = Skills.resolve_name(skillID) end
+
+    return {
+      maxHit = function(damage)
+        if mv.maxHit[atkIndex] == nil or damage > mv.maxHit[atkIndex] then mv.maxHit[atkIndex] = damage end
+      end,
+      incHits = function() mv.hits[atkIndex] = (mv.hits[atkIndex] or 0) + 1 end,
+      addDamage = function(damage) mv.damage[atkIndex] = (mv.damage[atkIndex] or 0) + damage end,
+      setDamage = function(damage) mv.damage[atkIndex] = damage end,
+    }
+  end
+
+  local function ExtraHitRegister(eventMask)
+    local idx = eventMask
+    
+    return {
+      incHits = function() ExHits.hits[idx] = (ExHits.hits[idx] or 0) + 1 end,
+      addDamage = function(damage) ExHits.damage[idx] = (ExHits.damage[idx] or 0) + damage end,
+      recalculateAverage = function() ExHits.average[idx] = (ExHits.damage[idx] or 0) / (ExHits.hits[idx] or 1) end,
+      getRecalculatedTotals = function() 
+        local totals = {}
+        
+        -- get a mask representing which skills are influenced by this skill
+        local affectedSkillsMask = reduce({pairs(ExHits.hits)}, 0, function(affMask, mask)
+          return (mask & eventMask ~= 0) and (affMask | mask) or affMask
+        end)
+        
+        -- loop over all affected skills
+        for event in ivalues(Event.maskToEvents(affectedSkillsMask)) do
+          local skillMask = Event.toMask(event)
+          local skillID = Event.getMeta(event).skillID
+
+          -- loop over all extra hit damage procs, including combined ones
+          for procMask, damage in pairs(ExHits.damage) do
+
+            -- if the skill was part of the damage proc
+            if skillMask & procMask ~= 0 then
+              local bits = Event.maskToEventBits(procMask)
+              local combinedAvg = reduce({ivalues(bits)}, 0, function(sum, bit) return sum + ExHits.average[bit] end)
+
+              local mult = ExHits.average[skillMask] / combinedAvg
+              totals[skillID] = (totals[skillID] or 0) + (mult * damage)
+            end
+
+          end
+
+        end
+
+        return totals
+      end,
+    }
   end
 
   local function handleExtraHitProc(damage)
-    local weaponID = 99 -- EXTRA
     local activeEventsMask = Event.snapshot() & Event.toMask("EXTRAHIT_PROCS")
     local activeEvents = Event.maskToEvents(activeEventsMask)
-    local name = ""
-
-    for i, event in ipairs(activeEvents) do
-      -- build the combined name, example: Scorcher + Bad Blood
-      if i ~= 1 then name = name .. " + " end
-      local meta = Event.getMeta(event)
-      name = name .. SkillUptime.Skills.resolve_name(meta.skillID)
-
-      -- register the damage under the constructed combined name
-      if next(activeEvents, i) == nil then
-        registerDamage(damage, weaponID, activeEventsMask, name)
+    local multipleActive = activeEventsMask & (activeEventsMask - 1) ~= 0
+    local exRegister = ExtraHitRegister(activeEventsMask)
+    local mvRegister = function(skillID) return moveRegister(99 --[[ EXTRA ]], skillID) end
+    
+    -- update internal extra hit tracking
+    exRegister.incHits()
+    exRegister.addDamage(damage)
+  
+    if multipleActive then
+      -- increment hit count for every skill that contributed to the proc
+      for event in ivalues(activeEvents) do
+        local skillID = Event.getMeta(event).skillID
+        mvRegister(skillID).incHits()
       end
+    else 
+      -- update hit count and max damage, also update the average damage for this skill
+      local skillID = Event.getMeta(activeEvents[1]).skillID
+      exRegister.recalculateAverage()
+      mvRegister(skillID).incHits()
+      mvRegister(skillID).maxHit(damage)
     end
 
-    -- also add to "All sources combined"
-    registerDamage(damage, weaponID, 0, "All Sources Combined")
+    -- recalculate damage of all affected skills
+    for skillID, damage in pairs(exRegister.getRecalculatedTotals()) do
+      mvRegister(skillID).setDamage(damage)
+    end
 
     Event.clear("EXTRAHIT_PROCS")
   end
 
   local function handleStatusProc(damage)
-    local weaponID = 98 -- STATUS
-    local activeEventsMask = Event.snapshot() & Event.toMask("STATUS_PROCS")
-    -- take the first active event
-    local procEvent = table.unpack(Event.maskToEvents(activeEventsMask))
+    local procEvent = Event.getActiveEvents("STATUS_PROCS")[1]
     local skillID = Event.getMeta(procEvent).skillID
-    local moveName = SkillUptime.Skills.resolve_name(skillID)
+    local register = moveRegister(98 --[[ STATUS ]], skillID)
 
-    registerDamage(damage, weaponID, skillID, moveName)
+    register.incHits()
+    register.maxHit(damage)
+    register.addDamage(damage)
 
     Event.clear(procEvent)
   end
@@ -1704,7 +1785,12 @@ SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Flags.uptime = {}; SkillUptime.Flags.timing_starts = {}; SkillUptime.Flags.data = {}; SkillUptime.Flags.hits_up = {}
   SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
+  SkillUptime.ExtraHits.hits = {}; SkillUptime.ExtraHits.damage = {}
   SkillUptime.Hits.total = 0
+
+  -- NOTE: ExtraHits.average does not get reset. The old values will serve as more accurate default values than the hardcoded ones.
+  --       The averages get recalculated by only relying on ExtraHits.hits and ExtraHits.damage, which do get reset, so this is fine.
+  --       By not reseting averages, we effectively use the last quests ending averages as default values.
 
   -- reset events
   SkillUptime.Event.clear("EXTRAHIT_PROCS", "STATUS_PROCS")
