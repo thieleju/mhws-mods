@@ -140,7 +140,7 @@ local SkillIDMax                      = TD_SkillEnum:get_field("MAX"):get_data()
 -- ============================================================================
 local config = {
   open = false,
-  tables = { skills = true, items = false, flags = false, movedamage = false },
+  tables = { skills = true, items = false, flags = false, movedamage = false, procdamage = false },
   columns = { primary = true, percent = true, active = true, state = true },
   strategy = {
     index = 1,
@@ -270,13 +270,21 @@ local SkillUptime = {
     },
     maxHit = {}, -- moveKey -> highest single hit damage
   },
-  ExtraHits = { 
+  Procs = {
+    damage = {},
+    hits = {},
+    names = {},
+    maxHit = {},
+    types = {},
+    extraHits = {
     damage = {}, -- eventMask -> damage
     hits = {}, -- eventMask -> hits
     average = {}, -- eventMask -> average (only has extra hits that weren't combined)
+    },
   },
   Flags    = { names = {}, data = {}, timing_starts = {}, uptime = {}, hits_up = {}, lastTick = nil },
   Hits     = { total = 0 },
+  Damage   = { total = 0 },
   Const    = {
     COLOR_RED = 0xFF0000FF,
     COLOR_GREEN = 0xFF00FF00,
@@ -662,7 +670,7 @@ local FLAGS_NAME_MAP   = {
 -- populate extra hit default average damage
 for event in ivalues(SkillUptime.Event.maskToEvents(SkillUptime.Event.toMask("EXTRAHIT_PROCS"))) do
   local idx = SkillUptime.Event.toMask(event)
-  SkillUptime.ExtraHits.average[idx] = SkillUptime.Event.getMeta(event).avg
+  SkillUptime.Procs.extraHits.average[idx] = SkillUptime.Event.getMeta(event).avg
 end
 
 -- ============================================================================
@@ -878,6 +886,7 @@ SkillUptime.Config.load = function()
     config.tables.items = (tables.items == true)
     config.tables.flags = (tables.flags == true)
     config.tables.movedamage = (tables.movedamage ~= false)
+    config.tables.procdamage = (tables.procdamage ~= false)
   end
   
   local columns = get_value({"columns"})
@@ -1647,21 +1656,22 @@ end
 SkillUptime.Hooks.onRequestDamageGUI = (function()
   local Event = SkillUptime.Event
   local Skills = SkillUptime.Skills
-  local mv = SkillUptime.Moves
-  local ExHits = SkillUptime.ExtraHits
+  local pr = SkillUptime.Procs
+  local ex = SkillUptime.Procs.extraHits
 
-  local function moveRegister(weaponID, skillID)
-    local atkIndex = weaponID .. ":" .. skillID
-    if mv.wpTypes[atkIndex] == nil then mv.wpTypes[atkIndex] = weaponID end
-    if mv.names[atkIndex] == nil then mv.names[atkIndex] = Skills.resolve_name(skillID) end
+
+  local function procRegister(procType, skillID)
+    local prIdx = procType .. ":" .. skillID
+    if pr.types[prIdx] == nil then pr.types[prIdx] = procType end
+    if pr.names[prIdx] == nil then pr.names[prIdx] = Skills.resolve_name(skillID) end
 
     return {
       maxHit = function(damage)
-        if mv.maxHit[atkIndex] == nil or damage > mv.maxHit[atkIndex] then mv.maxHit[atkIndex] = damage end
+        if pr.maxHit[prIdx] == nil or damage > pr.maxHit[prIdx] then pr.maxHit[prIdx] = damage end
       end,
-      incHits = function() mv.hits[atkIndex] = (mv.hits[atkIndex] or 0) + 1 end,
-      addDamage = function(damage) mv.damage[atkIndex] = (mv.damage[atkIndex] or 0) + damage end,
-      setDamage = function(damage) mv.damage[atkIndex] = damage end,
+      incHits = function() pr.hits[prIdx] = (pr.hits[prIdx] or 0) + 1 end,
+      addDamage = function(damage) pr.damage[prIdx] = (pr.damage[prIdx] or 0) + damage end,
+      setDamage = function(damage) pr.damage[prIdx] = damage end,
     }
   end
 
@@ -1669,14 +1679,14 @@ SkillUptime.Hooks.onRequestDamageGUI = (function()
     local idx = eventMask
     
     return {
-      incHits = function() ExHits.hits[idx] = (ExHits.hits[idx] or 0) + 1 end,
-      addDamage = function(damage) ExHits.damage[idx] = (ExHits.damage[idx] or 0) + damage end,
-      recalculateAverage = function() ExHits.average[idx] = (ExHits.damage[idx] or 0) / (ExHits.hits[idx] or 1) end,
+      incHits = function() ex.hits[idx] = (ex.hits[idx] or 0) + 1 end,
+      addDamage = function(damage) ex.damage[idx] = (ex.damage[idx] or 0) + damage end,
+      recalculateAverage = function() ex.average[idx] = (ex.damage[idx] or 0) / (ex.hits[idx] or 1) end,
       getRecalculatedTotals = function() 
         local totals = {}
         
         -- get a mask representing which skills are influenced by this skill
-        local affectedSkillsMask = reduce({pairs(ExHits.hits)}, 0, function(affMask, mask)
+        local affectedSkillsMask = reduce({pairs(ex.hits)}, 0, function(affMask, mask)
           return (mask & eventMask ~= 0) and (affMask | mask) or affMask
         end)
         
@@ -1686,14 +1696,14 @@ SkillUptime.Hooks.onRequestDamageGUI = (function()
           local skillID = Event.getMeta(event).skillID
 
           -- loop over all extra hit damage procs, including combined ones
-          for procMask, damage in pairs(ExHits.damage) do
+          for procMask, damage in pairs(ex.damage) do
 
             -- if the skill was part of the damage proc
             if skillMask & procMask ~= 0 then
               local bits = Event.maskToEventBits(procMask)
-              local combinedAvg = reduce({ivalues(bits)}, 0, function(sum, bit) return sum + ExHits.average[bit] end)
+              local combinedAvg = reduce({ivalues(bits)}, 0, function(sum, bit) return sum + ex.average[bit] end)
 
-              local mult = ExHits.average[skillMask] / combinedAvg
+              local mult = ex.average[skillMask] / combinedAvg
               totals[skillID] = (totals[skillID] or 0) + (mult * damage)
             end
 
@@ -1711,7 +1721,7 @@ SkillUptime.Hooks.onRequestDamageGUI = (function()
     local activeEvents = Event.maskToEvents(activeEventsMask)
     local multipleActive = activeEventsMask & (activeEventsMask - 1) ~= 0
     local exRegister = ExtraHitRegister(activeEventsMask)
-    local mvRegister = function(skillID) return moveRegister(99 --[[ EXTRA ]], skillID) end
+    local pRegister = function(skillID) return procRegister("EXTRA", skillID) end
     
     -- update internal extra hit tracking
     exRegister.incHits()
@@ -1721,19 +1731,19 @@ SkillUptime.Hooks.onRequestDamageGUI = (function()
       -- increment hit count for every skill that contributed to the proc
       for event in ivalues(activeEvents) do
         local skillID = Event.getMeta(event).skillID
-        mvRegister(skillID).incHits()
+        pRegister(skillID).incHits()
       end
     else 
       -- update hit count and max damage, also update the average damage for this skill
       local skillID = Event.getMeta(activeEvents[1]).skillID
       exRegister.recalculateAverage()
-      mvRegister(skillID).incHits()
-      mvRegister(skillID).maxHit(damage)
+      pRegister(skillID).incHits()
+      pRegister(skillID).maxHit(damage)
     end
 
     -- recalculate damage of all affected skills
     for skillID, damage in pairs(exRegister.getRecalculatedTotals()) do
-      mvRegister(skillID).setDamage(damage)
+      pRegister(skillID).setDamage(damage)
     end
 
     Event.clear("EXTRAHIT_PROCS")
@@ -1742,11 +1752,12 @@ SkillUptime.Hooks.onRequestDamageGUI = (function()
   local function handleStatusProc(damage)
     local procEvent = Event.getActiveEvents("STATUS_PROCS")[1]
     local skillID = Event.getMeta(procEvent).skillID
-    local register = moveRegister(98 --[[ STATUS ]], skillID)
+    local register = procRegister("STATUS", skillID)
 
     register.incHits()
     register.maxHit(damage)
     register.addDamage(damage)
+    SkillUptime.Damage.total = (SkillUptime.Damage.total or 0) + damage
 
     Event.clear(procEvent)
   end
@@ -1785,11 +1796,13 @@ SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Flags.uptime = {}; SkillUptime.Flags.timing_starts = {}; SkillUptime.Flags.data = {}; SkillUptime.Flags.hits_up = {}
   SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
-  SkillUptime.ExtraHits.hits = {}; SkillUptime.ExtraHits.damage = {}
+  SkillUptime.Procs.damage = {}; SkillUptime.Procs.hits = {}; SkillUptime.Procs.names = {}; SkillUptime.Procs.maxHit = {};
+  SkillUptime.Procs.extraHits.hits = {}; SkillUptime.Procs.extraHits.damage = {}
+  SkillUptime.Damage.total = 0
   SkillUptime.Hits.total = 0
 
-  -- NOTE: ExtraHits.average does not get reset. The old values will serve as more accurate default values than the hardcoded ones.
-  --       The averages get recalculated by only relying on ExtraHits.hits and ExtraHits.damage, which do get reset, so this is fine.
+  -- NOTE: Procs.extraHits.average does not get reset. The old values will serve as more accurate default values than the hardcoded ones.
+  --       The averages get recalculated by only relying on Procs.extraHits.hits and Procs.extraHits.damage, which do get reset, so this is fine.
   --       By not reseting averages, we effectively use the last quests ending averages as default values.
 
   -- reset events
@@ -1873,6 +1886,7 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
 
   -- Count this hit
   SkillUptime.Hits.total = (SkillUptime.Hits.total or 0) + 1
+  SkillUptime.Damage.total = (SkillUptime.Damage.total or 0) + final
   SkillUptime.Util.logDebug(string.format("Player hit registered! Total hits: %d, Damage: %.0f", SkillUptime.Hits.total,
     final))
 
@@ -2377,6 +2391,94 @@ SkillUptime.UI.draw = function()
         imgui.end_table()
       end
 
+      -- Total damage footer (don't show if proc damage table is visible)
+      if totalDmg > 0 and not config.tables.procdamage then
+        imgui.text(string.format("Total Damage: %.0f", totalDmg))
+      end
+    end
+  end
+
+  -- Proc Damage
+  if config.tables.procdamage then
+    local pr = SkillUptime.Procs
+    local totalDmg = SkillUptime.Damage.total or 0
+    local procCount = reduce({pairs(pr.damage)}, 0, function(sum) return sum + 1 end)
+    imgui.text_colored("> Proc Damage (" .. tostring(procCount) .. ")", SkillUptime.Const.COLOR_BLUE)
+
+    if procCount > 0 then
+      if imgui.begin_table("proc_damage_table", 6, tableFlags) then
+        imgui.table_setup_column("Type")
+        imgui.table_setup_column("Source")
+        imgui.table_setup_column("Hits")
+        imgui.table_setup_column("Total Damage")
+        imgui.table_setup_column("Highest Single Hit")
+        imgui.table_setup_column("Dmg %")
+        imgui.table_headers_row()
+
+        -- Group procs by type + proc name
+        local grouped = {}
+        for key, dmg in pairs(pr.damage) do
+          local ptype = pr.types[key]
+          local procName = pr.names[key] or key
+          local tname = tostring(ptype) -- it should already be a string
+
+          -- Create group key from type + proc name
+          local groupKey = tname .. "|" .. procName
+
+          if not grouped[groupKey] then
+            grouped[groupKey] = {
+              tname = tname,
+              procName = procName,
+              dmg = 0,
+              hits = 0,
+              maxHit = 0,
+            }
+          end
+
+          -- Aggregate data
+          grouped[groupKey].dmg = grouped[groupKey].dmg + dmg
+          grouped[groupKey].hits = grouped[groupKey].hits + (pr.hits[key] or 0)
+          local thisMaxHit = pr.maxHit[key] or 0
+          if thisMaxHit > grouped[groupKey].maxHit then
+            grouped[groupKey].maxHit = thisMaxHit
+          end
+        end
+
+        -- Convert to array and sort by damage
+        local rows = {}
+        for group in values(grouped) do table.insert(rows, group) end
+        table.sort(rows, function(a, b) return a.dmg > b.dmg end)
+
+        for r in ivalues(rows) do
+          imgui.table_next_row()
+
+          -- Proc type column
+          imgui.table_set_column_index(0)
+          imgui.text(r.tname)
+
+          -- Proc name column
+          imgui.table_set_column_index(1)
+          imgui.text(r.procName)
+
+          -- Hits column
+          imgui.table_set_column_index(2)
+          imgui.text(tostring(r.hits))
+          
+          -- Total Damage column
+          imgui.table_set_column_index(3)
+          imgui.text(string.format("%.0f", r.dmg))
+          
+          -- Highest Single Hit column
+          imgui.table_set_column_index(4)
+          imgui.text(r.maxHit > 0 and string.format("%.0f", r.maxHit) or "-")
+          
+          -- Dmg % column
+          imgui.table_set_column_index(5)
+          imgui.text(string.format("%.1f%%", (r.dmg / totalDmg) * 100.0))
+        end
+        imgui.end_table()
+      end
+
       -- Total damage footer
       if totalDmg > 0 then
         imgui.text(string.format("Total Damage: %.0f", totalDmg))
@@ -2434,6 +2536,11 @@ re.on_draw_ui(function()
       SkillUptime.Config.save()
     end
     toggled, config.tables.flags = imgui.checkbox("Status Flags", config.tables.flags)
+    if toggled then
+      SkillUptime.Config.save()
+    end
+    imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
+    toggled, config.tables.procdamage = imgui.checkbox("Proc Damage", config.tables.procdamage)
     if toggled then
       SkillUptime.Config.save()
     end
@@ -2559,7 +2666,6 @@ SkillUptime.Event.on({ "EXTRAHIT_PROCS", "STATUS_PROCS" }, function(eventName, e
   local sid = eventMeta.skillID
   local name = SkillUptime.Skills.resolve_name(sid)
 
-  SkillUptime.Skills.hits_up[sid] = (SkillUptime.Skills.hits_up[sid] or 0) + 1
   SkillUptime.Util.logDebug(name .. " extra damage triggered")
 end)
 
