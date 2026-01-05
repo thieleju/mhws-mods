@@ -310,7 +310,7 @@ local SkillUptime = {
         SCORCHER_PROCCED = { skillID = 999005, avg = 30 },
         BAD_BLOOD_PROCCED = { skillID = 999006, avg = 20 },
         WHITEFLAME_TORRENT_PROCCED = { skillID = 999007, avg = 60 },
-        AZURE_BOLT_PROCCED = { skillID = 999008, avg = 100 },
+        AZURE_BOLT_PROCCED = { skillID = 999008, avg = 40 },
       },
       STATUS_PROCS = {
         FLAYER_PROC_PROCCED = { skillID = 999009 },
