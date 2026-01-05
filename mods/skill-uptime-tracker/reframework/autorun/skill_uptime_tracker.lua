@@ -78,6 +78,7 @@ local TD_GUI_DamageType               = sdk.find_type_definition("app.GUI020020.
 local TD_ConditionSkillStabbing       = sdk.find_type_definition("app.cEnemyBadConditionSkillStabbing")
 local TD_ConditionSkillRyuki          = sdk.find_type_definition("app.cEnemyBadConditionSkillRyuki")
 local TD_ConditionBlast               = sdk.find_type_definition("app.cEnemyBadConditionBlast")
+local TD_TargetAccessKeyUtil          = sdk.find_type_definition("app.TargetAccessKeyUtil")
 
 -- ============================================================================
 -- Type Constants
@@ -122,6 +123,10 @@ local FN_BeginSkillDischarge          = TD_SkillParamInfo:get_method("beginSkill
 local FN_SkillStabbingOnActivate      = TD_ConditionSkillStabbing:get_method("onActivate") or nil -- flayer tracking method
 local FN_SkillRyukiOnActivate         = TD_ConditionSkillRyuki:get_method("onActivate") or nil -- Convert Element tracking method
 local FN_BlastOnActivate              = TD_ConditionBlast:get_method("onActivate") or nil -- Blast explosion tracking method
+
+-- Weakness Exploit/Mind's Eye tracking methods
+local FN_CalcStockDamage              = TD_cEnemyStockDamage:get_method("calcStockDamage(app.cEnemyStockDamage.cCalcDamage, app.cEnemyStockDamage.cPreCalcDamage, app.cEnemyStockDamage.cDamageRate, System.Boolean)")
+local FN_StockDamageDetail            = TD_cEnemyStockDamage:get_method("stockDamageDetail(app.HitInfo)")
 
 -- ============================================================================
 -- Field Definitions
@@ -297,6 +302,10 @@ local SkillUptime = {
     CONFIG_PATH = "skill_uptime_tracker.json",
     FRENZY_SKILL_ID = 194,
     SEREGIOS_TENACITY_SKILL_ID = 217,
+    MINDS_EYE_SKILL_ID = 19,
+    WEX_SKILL_ID = 63,
+    WEX_CUSTOM_ID = 63001,
+    WEX_WOUND_CUSTOM_ID = 63002,
     MOVE_ACTIVE_GAP = 2.0,       -- seconds; gap threshold to close an activity segment for a move
     MOVE_TABLE_MAX_HEIGHT = 260, -- pixels; max height for Move Damage table before scrolling
     EPSILON = 0.0005,
@@ -677,6 +686,110 @@ for event in ivalues(SkillUptime.Event.maskToEvents(SkillUptime.Event.toMask("EX
   SkillUptime.Procs.extraHits.average[idx] = SkillUptime.Event.getMeta(event).avg
 end
 
+local function generateEnum(typename)
+  local t = sdk.find_type_definition(typename)
+  if not t then return {} end
+
+  local fields = t:get_fields()
+  local enum = {}
+
+  for i, field in ipairs(fields) do
+    if field:is_static() then
+      local name = field:get_name()
+      local raw_value = field:get_data(nil)
+
+      enum[name] = raw_value
+    end
+  end
+
+  return enum
+end
+
+
+---@class app.TARGET_ACCESS_KEY.CATEGORY
+---@field INVALID -1
+---@field PLAYER 0
+---@field ENEMY 1
+---@field OTOMO 2
+---@field PORTER 3
+---@field GIMMICK 4
+---@field NPC 5
+---@field MAX 6
+---@field EM_LOST_PARTS 7
+
+---@type app.TARGET_ACCESS_KEY.CATEGORY
+local CATEGORY = generateEnum("app.TARGET_ACCESS_KEY.CATEGORY")
+
+---@class app.HitDef.ACTION_TYPE
+---@field NONE 0
+---@field SLASH 1
+---@field BLOW 2
+---@field SHOT 3
+---@field MAX 4
+
+---@type app.TARGET_ACCESS_KEY.CATEGORY
+local ACTION_TYPE = generateEnum("app.HitDef.ACTION_TYPE")
+
+---@class AccessKeyUtil
+---@field getPlayerManageInfo fun(key: TARGET_ACCESS_KEY, a: boolean, b: boolean): cPlayerManageInfo
+---@field getLobbyPlayerManageInfo fun(key: TARGET_ACCESS_KEY, a: boolean, b: boolean): cLobbyPlayerManageInfo
+---@field getEnemyManageInfo fun(key: TARGET_ACCESS_KEY, a: boolean): cEnemyManageInfo
+---@field getNpcManageInfo fun(key: TARGET_ACCESS_KEY): cNpcManageInfo
+---@field getPorterManageInfo fun(key: TARGET_ACCESS_KEY): cPorterManageInfo
+---@field getOtomoManageInfo fun(key: TARGET_ACCESS_KEY): cOtomoManageInfo
+---@field getGimmickApp fun(key: TARGET_ACCESS_KEY): cGimmickBaseApp
+---@field getEmLostParts fun(key: TARGET_ACCESS_KEY): cEnemyLostParts
+---@field getGameObject fun(key: TARGET_ACCESS_KEY): GameObject
+---@field getPlayerGameObject fun(key: TARGET_ACCESS_KEY, a: boolean, b: boolean): GameObject
+---@field getEnemyGameObject fun(key: TARGET_ACCESS_KEY, a: boolean): GameObject
+---@field getNpcGameObject fun(key: TARGET_ACCESS_KEY): GameObject
+---@field getPorterGameObject fun(key: TARGET_ACCESS_KEY): GameObject
+---@field getOtomoGameObject fun(key: TARGET_ACCESS_KEY): GameObject
+---@field getGimmickGameObject fun(key: TARGET_ACCESS_KEY): GameObject
+---@field getEmLostPartsGameObject fun(key: TARGET_ACCESS_KEY): GameObject
+---@field getGameContext fun(key: TARGET_ACCESS_KEY): cGameContextHolder
+---@field getPlayerContext fun(key: TARGET_ACCESS_KEY, a: boolean, b: boolean): cPlayerContextHolder
+---@field getEnemyContext fun(key: TARGET_ACCESS_KEY, a: boolean, b: boolean): cEnemyContextHolder
+---@field getNpcContext fun(key: TARGET_ACCESS_KEY): cNpcContextHolder
+---@field getPorterContext fun(key: TARGET_ACCESS_KEY): cPorterContextHolder
+---@field getOtomoContext fun(key: TARGET_ACCESS_KEY): cOtomoContextHolder
+---@field getGimmickContext fun(key: TARGET_ACCESS_KEY): cGimmickContextHolder
+---@field getCharacter fun(key: TARGET_ACCESS_KEY): cCharacterBase
+---@field getHunterCharacter fun(key: TARGET_ACCESS_KEY): cHunterCharacter
+---@field getPlayerCharacter fun(key: TARGET_ACCESS_KEY, a: boolean, b: boolean): cPlayerCharacter
+---@field getEnemyCharacter fun(key: TARGET_ACCESS_KEY, a: boolean, b: boolean): cEnemyCharacter
+---@field getNpcCharacter fun(key: TARGET_ACCESS_KEY, a: boolean): cNpcCharacter
+---@field getNpcHunterCharacter fun(key: TARGET_ACCESS_KEY, a: boolean): cHunterCharacter
+---@field getPorterCharacter fun(key: TARGET_ACCESS_KEY): cPorterCharacter
+---@field getOtomoCharacter fun(key: TARGET_ACCESS_KEY): cOtomoCharacter
+---@field makeTargetAccessKey fun(obj: GameObject): TARGET_ACCESS_KEY
+---@field makeTargetAccessKey fun(obj: cCharacterBase): TARGET_ACCESS_KEY
+---@field makeTargetAccessKey fun(obj: cIPlayerContextHolder): TARGET_ACCESS_KEY
+---@field makePlayerLobbyTargetAccessKey fun(hunter: cHunterCharacter): TARGET_ACCESS_KEY
+---@field makeTargetAccessKey fun(obj: cEnemyContextHolder): TARGET_ACCESS_KEY
+---@field makeTargetAccessKey fun(obj: cNpcContextHolder): TARGET_ACCESS_KEY
+---@field makeTargetAccessKey fun(obj: cPorterContextHolder): TARGET_ACCESS_KEY
+---@field makeTargetAccessKey fun(obj: cOtomoContextHolder): TARGET_ACCESS_KEY
+---@field makeTargetAccessKey fun(obj: cGimmickContextHolder): TARGET_ACCESS_KEY
+---@field makeTargetAccessKey fun(obj: cEnemyLostParts): TARGET_ACCESS_KEY
+---@field makeTargetAccessKey fun(id: System.Int32): TARGET_ACCESS_KEY
+---@field getSetID fun(key: TARGET_ACCESS_KEY): System.Int32
+---@field getNetID fun(key: TARGET_ACCESS_KEY): System.Int32
+---@field getEnemySystemIndex fun(key: TARGET_ACCESS_KEY): System.Int32
+---@field getEnemySystemIndexCounter fun(key: TARGET_ACCESS_KEY): System.Int32
+
+---@type AccessKeyUtil
+local AccessKeyUtil = (function()
+  local methods = TD_TargetAccessKeyUtil:get_methods()
+  local table = {}
+
+  for method in ivalues(methods) do
+    table[method:get_name()] = function(...) return method:call(nil, ...) end
+  end
+
+  return table
+end)()
+
 -- ============================================================================
 -- Utility Functions
 -- ============================================================================
@@ -1041,6 +1154,11 @@ SkillUptime.Util.to_uint32 = function(value)
   return sdk.to_int64(value) & 0xFFFFFFFF
 end
 
+SkillUptime.Util.derefPtr = function(ptr)
+  local fake_int64 = sdk.to_valuetype(ptr, "System.UInt64")
+  return fake_int64 and fake_int64:get_field("m_value") or nil
+end
+
 SkillUptime.Util.getEnumMap = (function()
   local enumCache = {}
 
@@ -1081,6 +1199,10 @@ SkillUptime.Skills.resolve_name = function(skill_id, level)
   if skill_id == 999009 then return "Flayer Proc" end
   if skill_id == 999010 then return "Convert Element Proc" end
   if skill_id == 999011 then return "Blast" end
+  
+  -- Custom names for specific stages of skills
+  if skill_id == SkillUptime.Const.WEX_CUSTOM_ID       then return SkillUptime.Skills.resolve_name(63) end
+  if skill_id == SkillUptime.Const.WEX_WOUND_CUSTOM_ID then return SkillUptime.Skills.resolve_name(63) .. " (wound)" end
 
   if SkillIDMax and skill_id >= SkillIDMax then return "[INVALID_SKILL]" end
 
@@ -1790,6 +1912,100 @@ SkillUptime.Hooks.onRequestDamageGUI = (function()
     
     if isExtraHit   then handleExtraHitProc(damage) end
     if isStatusProc then handleStatusProc(damage) end
+  end
+end)();
+
+(function()
+  local motionValue = 0
+
+  -- stockDamageDetail(app.HitInfo)
+  SkillUptime.Hooks.onStockDamageDetail = function(args)
+    local hitInfo = sdk.to_managed_object(args[3])
+    local hitOwner = hitInfo:getActualAttackOwner()
+
+     -- Get the master player's character GameObject
+    local pm = SkillUptime.Core.GetSingleton("app.PlayerManager")
+    local playerInfo = pm and pm:getMasterPlayer() or nil
+    local playerChar = playerInfo and playerInfo:get_Character() or nil
+    local playerGO = playerChar and playerChar:get_GameObject() or nil
+
+    if hitOwner ~= (playerGO or playerChar) then return end
+
+    local attackData = hitInfo:get_AttackData()
+    motionValue = attackData and attackData._OriginalAttackAdjust or 0
+  end
+
+  -- calcStockDamage(app.cEnemyStockDamage.cCalcDamage, app.cEnemyStockDamage.cPreCalcDamage, app.cEnemyStockDamage.cDamageRate, System.Boolean)
+  SkillUptime.Hooks.onCalcStockDamage = function(args)
+    local this = sdk.to_managed_object(args[2])
+    if not this then return end
+
+    local preCalcDmg = sdk.to_managed_object(SkillUptime.Util.derefPtr(args[4]))
+    if not preCalcDmg then return end
+
+    local attacker = preCalcDmg.Common.Attacker
+    if attacker.Category ~= CATEGORY.PLAYER then return end
+
+    local hunterCharacter = AccessKeyUtil.getHunterCharacter(attacker)
+    if not hunterCharacter:get_IsMaster() then return end
+
+    local enemyCtx = this:get_Context():get_Em()
+    if not enemyCtx:get_IsBoss() then return end
+
+    local function meatToHzv(meat, actionType) return {
+      raw = meat:getActionMeat(actionType),
+      fire = meat._Fire,
+      water = meat._Water,
+      thunder = meat._Thunder,
+      ice = meat._Ice,
+      dragon = meat._Dragon,
+      stun = meat._Stun
+    } end
+
+    -- get the hitzone values
+    local meatIndex = preCalcDmg.Common.MeatIndex._Value
+    local actionType = preCalcDmg.ActionType
+    local meatArray = enemyCtx.Parts._ParamParts._MeatArray._DataArray
+    local meat = meatArray[meatIndex]
+    local hzv = meatToHzv(meat, actionType)
+
+    -- get the unwounded hitzone values
+    local partsArray = enemyCtx.Parts._ParamParts._PartsArray._DataArray
+    local partsIndex = preCalcDmg.Common.PartsIndex
+    local dmgParts = enemyCtx.Parts._DmgParts
+    local meatSlot = dmgParts[partsIndex]:get_MeatSlot()
+    local meatUnwoundedGuid = partsArray[partsIndex]:getPartsMeatGuid(meatSlot)
+    local meatUnwoundedIndex = enemyCtx.Parts._ParamParts:getMeatIndex(meatUnwoundedGuid)._Value
+    local unwoundedMeat = meatArray[meatUnwoundedIndex]
+    local unwoundedHzv = meatToHzv(unwoundedMeat, actionType)
+
+    -- get if is a wound hit
+    local scarIndex = preCalcDmg.Common.ScarIndex
+    local scar = scarIndex ~= -1 and enemyCtx.Scar._ScarParts:Get(scarIndex) or nil
+    local isHitWound = scar and scar:get_State() == 2 or false
+
+    -- get if certain skills are active
+    local WEX_ID = SkillUptime.Const.WEX_SKILL_ID
+    local WEX_CUSTOM_ID = SkillUptime.Const.WEX_CUSTOM_ID
+    local WEX_WOUND_ID = SkillUptime.Const.WEX_WOUND_CUSTOM_ID
+    local MINDS_EYE_ID = SkillUptime.Const.MINDS_EYE_SKILL_ID
+    local hunterSkill = hunterCharacter:get_HunterSkill()
+    local isWexActive = hunterSkill:checkSkillActive(WEX_ID)
+    local isMindsEyeActive = hunterSkill:checkSkillActive(MINDS_EYE_ID)
+
+    -- Handle Weakness Exploit and Mind's eye skill uptime.
+    if unwoundedHzv.raw >= 45 and isWexActive then
+      SkillUptime.Skills.hits_up[WEX_CUSTOM_ID] = (SkillUptime.Skills.hits_up[WEX_CUSTOM_ID] or 0) + 1
+      SkillUptime.Skills.mv_up[WEX_CUSTOM_ID]   = (SkillUptime.Skills.mv_up[WEX_CUSTOM_ID]   or 0) + motionValue
+
+      if isHitWound then
+        SkillUptime.Skills.hits_up[WEX_WOUND_ID] = (SkillUptime.Skills.hits_up[WEX_WOUND_ID] or 0) + 1
+        SkillUptime.Skills.mv_up[WEX_WOUND_ID]   = (SkillUptime.Skills.mv_up[WEX_WOUND_ID]   or 0) + motionValue
+      end
+    elseif unwoundedHzv.raw < 45 and isMindsEyeActive then
+      SkillUptime.Skills.hits_up[MINDS_EYE_ID] = (SkillUptime.Skills.hits_up[MINDS_EYE_ID] or 0) + 1
+      SkillUptime.Skills.mv_up[MINDS_EYE_ID]   = (SkillUptime.Skills.mv_up[MINDS_EYE_ID]   or 0) + motionValue
+    end
   end
 end)()
 
@@ -2763,3 +2979,7 @@ SkillUptime.Core.registerHook(FN_BeginSkillDischarge, SkillUptime.Hooks.onBeginS
 SkillUptime.Core.registerHook(FN_SkillStabbingOnActivate, SkillUptime.Hooks.onSkillStabbingOnActivate, nil)
 SkillUptime.Core.registerHook(FN_SkillRyukiOnActivate, SkillUptime.Hooks.onSkillRyukiOnActivate, nil)
 SkillUptime.Core.registerHook(FN_BlastOnActivate, SkillUptime.Hooks.onBlastOnActivate, nil)
+
+-- weakness exploit/mind's eye tracking hooks
+SkillUptime.Core.registerHook(FN_CalcStockDamage, SkillUptime.Hooks.onCalcStockDamage, nil)
+SkillUptime.Core.registerHook(FN_StockDamageDetail, SkillUptime.Hooks.onStockDamageDetail, nil)
