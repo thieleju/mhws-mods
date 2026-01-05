@@ -158,8 +158,9 @@ local SkillUptime = {
   defaultFont = nil,
   Strategy = {
     defs = {
-      { label = "In combat",       useHitsView = false, showBattleHeader = true,  accumulateTime = true },
-      { label = "Hits (up/total)", useHitsView = true,  showBattleHeader = false, accumulateTime = false },
+      { label = "In combat",                mode = "IN_COMBAT",     showBattleHeader = true,  accumulateTime = true },
+      { label = "Hits (up/total)",          mode = "HITS",          showBattleHeader = false, accumulateTime = false },
+      { label = "Motion Values (up/total)", mode = "MOTION_VALUES", showBattleHeader = false, accumulateTime = false }
     },
     labels = {},
   },
@@ -170,6 +171,7 @@ local SkillUptime = {
     uptime = {},
     name_cache = {},
     hits_up = {},
+    mv_up = {},
     InfoFields = {
       -- All cInfo fields from cHunterSkillParamInfo that contain skill data
       "_ToishiBoostInfo",         -- Sharpness Management
@@ -215,6 +217,7 @@ local SkillUptime = {
     timing_starts = {},
     uptime = {},
     hits_up = {},
+    mv_up = {},
     name_cache = {},
     ItemIDs = {
       Kairiki = 125,
@@ -282,9 +285,10 @@ local SkillUptime = {
     average = {}, -- eventMask -> average (only has extra hits that weren't combined)
     },
   },
-  Flags    = { names = {}, data = {}, timing_starts = {}, uptime = {}, hits_up = {}, lastTick = nil },
+  Flags    = { names = {}, data = {}, timing_starts = {}, uptime = {}, hits_up = {}, mv_up = {}, lastTick = nil },
   Hits     = { total = 0 },
   Damage   = { total = 0 },
+  MV       = { total = 0},
   Const    = {
     COLOR_RED = 0xFF0000FF,
     COLOR_GREEN = 0xFF00FF00,
@@ -1791,15 +1795,16 @@ end)()
 
 SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Battle.active = false; SkillUptime.Battle.start = 0.0; SkillUptime.Battle.total = 0.0
-  SkillUptime.Skills.uptime = {}; SkillUptime.Skills.running = {}; SkillUptime.Skills.timing_starts = {}; SkillUptime.Skills.hits_up = {}; SkillUptime.Skills.name_cache = {}
-  SkillUptime.Items.uptime = {}; SkillUptime.Items.timing_starts = {}; SkillUptime.Items.data = {}; SkillUptime.Items.hits_up = {}
-  SkillUptime.Flags.uptime = {}; SkillUptime.Flags.timing_starts = {}; SkillUptime.Flags.data = {}; SkillUptime.Flags.hits_up = {}
+  SkillUptime.Skills.uptime = {}; SkillUptime.Skills.running = {}; SkillUptime.Skills.timing_starts = {}; SkillUptime.Skills.hits_up = {}; SkillUptime.Skills.mv_up = {}; SkillUptime.Skills.name_cache = {}
+  SkillUptime.Items.uptime = {}; SkillUptime.Items.timing_starts = {}; SkillUptime.Items.data = {}; SkillUptime.Items.hits_up = {}; SkillUptime.Items.mv_up = {}
+  SkillUptime.Flags.uptime = {}; SkillUptime.Flags.timing_starts = {}; SkillUptime.Flags.data = {}; SkillUptime.Flags.hits_up = {}; SkillUptime.Flags.mv_up = {}
   SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
   SkillUptime.Procs.damage = {}; SkillUptime.Procs.hits = {}; SkillUptime.Procs.names = {}; SkillUptime.Procs.maxHit = {};
   SkillUptime.Procs.extraHits.hits = {}; SkillUptime.Procs.extraHits.damage = {}
   SkillUptime.Damage.total = 0
   SkillUptime.Hits.total = 0
+  SkillUptime.MV.total = 0
 
   -- NOTE: Procs.extraHits.average does not get reset. The old values will serve as more accurate default values than the hardcoded ones.
   --       The averages get recalculated by only relying on Procs.extraHits.hits and Procs.extraHits.damage, which do get reset, so this is fine.
@@ -1839,6 +1844,7 @@ SkillUptime.Hooks.reset_all = function()
     rec.Activated = false; rec.Timer = 0
   end
   SkillUptime.Hits.total = 0; SkillUptime.Skills.hits_up = {}; SkillUptime.Items.hits_up = {}; SkillUptime.Flags.hits_up = {}
+  SkillUptime.MV.total = 0;   SkillUptime.Skills.mv_up = {};   SkillUptime.Items.mv_up = {};   SkillUptime.Flags.mv_up = {}
   SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
   SkillUptime.Util.logDebug("Manual reset requested")
@@ -1884,7 +1890,12 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   local okB, vB = pcall(function() return ctx:get_IsBoss() end); if okB then isBoss = vB and true or false end
   if not isBoss then return end
 
+  -- Get hit Motion Value
+  local attackData = hitInfo:get_AttackData()
+  local motionValue = attackData and attackData._OriginalAttackAdjust or 0
+
   -- Count this hit
+  SkillUptime.MV.total = (SkillUptime.MV.total or 0) + motionValue
   SkillUptime.Hits.total = (SkillUptime.Hits.total or 0) + 1
   SkillUptime.Damage.total = (SkillUptime.Damage.total or 0) + final
   SkillUptime.Util.logDebug(string.format("Player hit registered! Total hits: %d, Damage: %.0f", SkillUptime.Hits.total,
@@ -1941,24 +1952,30 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   local counted = {}
   for sid, rec in pairs(SkillUptime.Status and SkillUptime.Status.SkillData or {}) do
     if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(sid)) then
-      SkillUptime.Skills.hits_up[sid] = (SkillUptime.Skills.hits_up[sid] or 0) + 1; counted[sid] = true
+      SkillUptime.Skills.hits_up[sid] = (SkillUptime.Skills.hits_up[sid] or 0) + 1
+      SkillUptime.Skills.mv_up[sid]   = (SkillUptime.Skills.mv_up[sid]   or 0) + motionValue
+      counted[sid] = true
     end
   end
   for sid, on in pairs(SkillUptime.Skills.running or {}) do
     if on and (not SkillUptime.Skills.is_excluded_skill(sid)) and not counted[sid] then
-      SkillUptime.Skills.hits_up[sid] = (SkillUptime.Skills.hits_up[sid] or 0) + 1; counted[sid] = true
+      SkillUptime.Skills.hits_up[sid] = (SkillUptime.Skills.hits_up[sid] or 0) + 1
+      SkillUptime.Skills.mv_up[sid]   = (SkillUptime.Skills.mv_up[sid]   or 0) + motionValue
+      counted[sid] = true
     end
   end
   -- Attribute to active item buffs
   for name, rec in pairs(SkillUptime.Items.data or {}) do
     if rec and rec.Activated then
       SkillUptime.Items.hits_up[name] = (SkillUptime.Items.hits_up[name] or 0) + 1
+      SkillUptime.Items.mv_up[name]   = (SkillUptime.Items.mv_up[name]   or 0) + motionValue
     end
   end
   -- Attribute to active status flags
   for fid, rec in pairs(SkillUptime.Flags.data or {}) do
     if rec and rec.Activated then
       SkillUptime.Flags.hits_up[fid] = (SkillUptime.Flags.hits_up[fid] or 0) + 1
+      SkillUptime.Flags.mv_up[fid]   = (SkillUptime.Flags.mv_up[fid]   or 0) + motionValue
     end
   end
 end
@@ -2030,9 +2047,14 @@ SkillUptime.UI.draw = function()
   -- Skills
   if config.tables.skills then
     local id_set = {}
-    local useHits = (strategy.useHitsView == true)
+    local useHits = (strategy.mode == "HITS")
+    local useMVs = (strategy.mode == "MOTION_VALUES")
     if useHits then
       for id, cnt in pairs(SkillUptime.Skills.hits_up or {}) do if (cnt or 0) > 0 and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+      for id, rec in pairs(SkillUptime.Status.SkillData or {}) do if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+      for id, on in pairs(SkillUptime.Skills.running or {}) do if on and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+    elseif useMVs then
+      for id, cnt in pairs(SkillUptime.Skills.mv_up or {}) do if (cnt or 0) > 0 and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
       for id, rec in pairs(SkillUptime.Status.SkillData or {}) do if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
       for id, on in pairs(SkillUptime.Skills.running or {}) do if on and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
     else
@@ -2056,6 +2078,9 @@ SkillUptime.UI.draw = function()
         if useHits then
           if config.columns.primary then imgui.table_setup_column("Hits (up/total)") end
           if config.columns.percent then imgui.table_setup_column("Hit Uptime (%)") end
+        elseif useMVs then
+          if config.columns.primary then imgui.table_setup_column("Motion Values (up/total)") end
+          if config.columns.percent then imgui.table_setup_column("Motion Value Uptime (%)") end
         else
           if config.columns.primary then imgui.table_setup_column("Uptime") end
           if config.columns.percent then imgui.table_setup_column("Uptime (%)") end
@@ -2071,7 +2096,7 @@ SkillUptime.UI.draw = function()
           end
           local total = base + live
           local display = true
-          if (not useHits) and (total <= epsilon) then display = false end
+          if (not (useHits or useMVs)) and (total <= epsilon) then display = false end
           if display then
             local name = SkillUptime.Skills.name_cache[id] or SkillUptime.Skills.resolve_name(id, 1); SkillUptime.Skills.name_cache[id] =
                 name
@@ -2089,6 +2114,18 @@ SkillUptime.UI.draw = function()
               end
               if config.columns.percent then
                 imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
+              end
+            elseif useMVs then
+              local up = SkillUptime.Skills.mv_up[id] or 0
+              local totMV = SkillUptime.MV.total or 0
+              local mvPct = (totMV > 0) and (up / totMV * 100.0) or 0.0
+              if config.columns.primary then
+                imgui.table_set_column_index(col);
+                if totMV > 0 then imgui.text(string.format("%d/%d", up, totMV)) else imgui.text("—") end
+                col = col + 1
+              end
+              if config.columns.percent then
+                imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", mvPct)); col = col + 1
               end
             else
               local pct = (elapsed > 0) and (total / elapsed * 100.0) or 0.0
@@ -2122,9 +2159,10 @@ SkillUptime.UI.draw = function()
 
   -- Items
   if config.tables.items then
-    -- Build rows for items that have been used (have uptime, hits, or currently active)
+    -- Build rows for items that have been used (have uptime, hits, motion values, or currently active)
     local itemRows = {}
-    local useHits = (strategy.useHitsView == true)
+    local useHits = (strategy.mode == "HITS")
+    local useMVs = (strategy.mode == "MOTION_VALUES")
 
     for key, rec in pairs(SkillUptime.Items.data or {}) do
       local base = SkillUptime.Items.uptime[key] or 0.0
@@ -2136,10 +2174,11 @@ SkillUptime.UI.draw = function()
       end
       local total = base + live
       local hits = SkillUptime.Items.hits_up[key] or 0
+      local mvs = SkillUptime.Items.mv_up[key] or 0
       local active = rec.Activated and true or false
 
-      -- Show item if it has uptime, hits, or is currently active
-      if total > epsilon or hits > 0 or active then
+      -- Show item if it has uptime, hits, motion values (mvs), or is currently active
+      if total > epsilon or hits > 0 or mvs > 0 or active then
         table.insert(itemRows, {
           key = key,
           name = rec.Name or tostring(key),
@@ -2164,6 +2203,9 @@ SkillUptime.UI.draw = function()
         if useHits then
           if config.columns.primary then imgui.table_setup_column("Hits (up/total)") end
           if config.columns.percent then imgui.table_setup_column("Hit Uptime (%)") end
+        elseif useMVs then
+          if config.columns.primary then imgui.table_setup_column("Motion Values (up/total)") end
+          if config.columns.percent then imgui.table_setup_column("Motion Value Uptime (%)") end
         else
           if config.columns.primary then imgui.table_setup_column("Uptime") end
           if config.columns.percent then imgui.table_setup_column("Uptime (%)") end
@@ -2186,6 +2228,18 @@ SkillUptime.UI.draw = function()
             end
             if config.columns.percent then
               imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
+            end
+          elseif useMVs then
+            local up = SkillUptime.Items.mv_up[row.key] or 0
+            local totMV = SkillUptime.MV.total or 0
+            local mvPct = (totMV > 0) and (up / totMV * 100.0) or 0.0
+            if config.columns.primary then
+              imgui.table_set_column_index(col);
+              if totMV > 0 then imgui.text(string.format("%d/%d", up, totMV)) else imgui.text("—") end
+              col = col + 1
+            end
+            if config.columns.percent then
+              imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", mvPct)); col = col + 1
             end
           else
             local pct = (elapsed > 0) and (row.total / elapsed * 100.0) or 0.0
@@ -2224,7 +2278,8 @@ SkillUptime.UI.draw = function()
     table.sort(flagRows, function(a, b) return a.key < b.key end)
     imgui.text_colored("> Status Flags (" .. #flagRows .. ")", SkillUptime.Const.COLOR_BLUE)
     if #flagRows > 0 then
-      local useHits = (strategy.useHitsView == true)
+      local useHits = (strategy.mode == "HITS")
+      local useMVs = (strategy.mode == "MOTION_VALUES")
       local colCount3 = 1
       if config.columns.primary then colCount3 = colCount3 + 1 end
       if config.columns.percent then colCount3 = colCount3 + 1 end
@@ -2235,6 +2290,9 @@ SkillUptime.UI.draw = function()
         if useHits then
           if config.columns.primary then imgui.table_setup_column("Hits (up/total)") end
           if config.columns.percent then imgui.table_setup_column("Hit Uptime (%)") end
+        elseif useMVs then
+          if config.columns.primary then imgui.table_setup_column("Motion Values (up/total)") end
+          if config.columns.percent then imgui.table_setup_column("Motion Value Uptime (%)") end
         else
           if config.columns.primary then imgui.table_setup_column("Uptime") end
           if config.columns.percent then imgui.table_setup_column("Uptime (%)") end
@@ -2259,6 +2317,20 @@ SkillUptime.UI.draw = function()
             end
             if config.columns.percent then
               imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", hitPct)); col = col + 1
+            end
+          elseif useMVs then
+            local up = SkillUptime.Flags.mv_up[row.key] or 0
+            local totMV = SkillUptime.MV.total or 0
+            local mvPct = (totMV > 0) and (up / totMV * 100.0) or 0.0
+            if config.columns.primary then
+              imgui.table_set_column_index(col); if totMV > 0 then
+                imgui.text(string.format("%d/%d", up, totMV))
+              else
+                imgui.text("—")
+              end; col = col + 1
+            end
+            if config.columns.percent then
+              imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", mvPct)); col = col + 1
             end
           else
             local pct = (elapsed > 0) and (row.total / elapsed * 100.0) or 0.0
