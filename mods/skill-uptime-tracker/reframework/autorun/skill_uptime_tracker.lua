@@ -135,6 +135,7 @@ local FLD_FullCharge                  = TD_SkillParamInfo:get_field("_IsActiveFu
 local FLD_Konshin                     = TD_SkillParamInfo:get_field("_IsActiveKonshin") or nil
 local FLD_KonshinUse                  = TD_SkillParamInfo:get_field("_KonshinStaminaUseTime") or nil
 local FLD_Challenger                  = TD_SkillParamInfo:get_field("_IsActiveChallenger") or nil
+local FLD_ContinuousAttack            = TD_SkillParamInfo:get_field("_ContinuousAttackInfo") or nil
 local FLD_Info_Skill                  = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_Skill") or nil
 local FLD_Info_Timer                  = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_Timer") or nil
 local FLD_Info_MaxTimer               = TD_SkillParamInfo_cInfo and TD_SkillParamInfo_cInfo:get_field("_MaxTimer") or nil
@@ -187,7 +188,7 @@ local SkillUptime = {
       "_BarbarianInfo",           -- Barbaric Feast
       "_PowerAwakeInfo",          -- Latent Power
       "_RyunyuInfo",              -- Dragon Milk Activation
-      "_ContinuousAttackInfo",    -- Continuous Attack
+      -- "_ContinuousAttackInfo", -- Continuous Attack (handled by custom id's for each stage)
       "_GuardianAreaInfo",        -- Guardian Area
       "_ResentmentInfo",          -- Resentment
       "_KnightInfo",              -- Offensive Guard
@@ -306,6 +307,8 @@ local SkillUptime = {
     WEX_SKILL_ID = 63,
     WEX_CUSTOM_ID = 63001,
     WEX_WOUND_CUSTOM_ID = 63002,
+    BURST_LV1_CUSTOM_ID = 115001,
+    BURST_LV2_CUSTOM_ID = 115002,
     MOVE_ACTIVE_GAP = 2.0,       -- seconds; gap threshold to close an activity segment for a move
     MOVE_TABLE_MAX_HEIGHT = 260, -- pixels; max height for Move Damage table before scrolling
     EPSILON = 0.0005,
@@ -1203,6 +1206,8 @@ SkillUptime.Skills.resolve_name = function(skill_id, level)
   -- Custom names for specific stages of skills
   if skill_id == SkillUptime.Const.WEX_CUSTOM_ID       then return SkillUptime.Skills.resolve_name(63) end
   if skill_id == SkillUptime.Const.WEX_WOUND_CUSTOM_ID then return SkillUptime.Skills.resolve_name(63) .. " (wound)" end
+  if skill_id == SkillUptime.Const.BURST_LV1_CUSTOM_ID then return SkillUptime.Skills.resolve_name(115) .. " Lv1" end
+  if skill_id == SkillUptime.Const.BURST_LV2_CUSTOM_ID then return SkillUptime.Skills.resolve_name(115) .. " Lv2" end
 
   if SkillIDMax and skill_id >= SkillIDMax then return "[INVALID_SKILL]" end
 
@@ -1546,6 +1551,22 @@ SkillUptime.Skills.update_active_skills = function()
   if isAdrenaline ~= nil then
     SkillUptime.Skills.update_boolean(skl, 101, isAdrenaline, 0, 0)
   end
+
+  -- Burst separated by stage 1 and 2
+  local continuousAttack = FLD_ContinuousAttack and FLD_ContinuousAttack:get_data(infos)
+  if continuousAttack then
+    local t = FLD_Info_Timer and (FLD_Info_Timer:get_data(continuousAttack) or 0) or 0
+    local m = FLD_Info_MaxTimer and (FLD_Info_MaxTimer:get_data(continuousAttack) or 0) or 0
+
+    if continuousAttack._HitCount >= 5 then
+      SkillUptime.Skills.update_boolean(skl, SkillUptime.Const.BURST_LV1_CUSTOM_ID, false)
+      SkillUptime.Skills.update_boolean(skl, SkillUptime.Const.BURST_LV2_CUSTOM_ID, (t or 0) > 0, t, m)
+    else
+      SkillUptime.Skills.update_boolean(skl, SkillUptime.Const.BURST_LV1_CUSTOM_ID, (t or 0) > 0, t, m)
+      SkillUptime.Skills.update_boolean(skl, SkillUptime.Const.BURST_LV2_CUSTOM_ID, false)
+    end
+  end
+  
   return skl, infos, status
 end
 
