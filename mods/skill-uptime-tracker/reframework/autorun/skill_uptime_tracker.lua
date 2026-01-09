@@ -8,52 +8,6 @@
 ---@diagnostic disable: undefined-global, undefined-doc-name, undefined-field
 
 -- ============================================================================
--- Lua Helpers
--- ============================================================================
--- Simple lua functions that extend the base toolset and are agnostic to the project itself.
--- These do not go under SkillUptime.Util as this makes them less convenient and they are project agnostic anyway.
-
-local function ivalues(t)
-  local i = 0
-  local function iter(t)
-    i = i + 1
-    return t[i]
-  end
-  return iter, t, 0
-end
-
-local function values(t)
-  local k = nil
-  local function iter(t)
-    local v = nil
-    k, v = next(t, k)
-    return v
-  end
-  return iter, t, nil
-end
-
---[[ use: 
-  local table = {1,2,3}
-  local sum = reduce({ ivalues(table) }, function(a, b) return a + b end)
-  print(sum) -- 6
-]]
-local function reduce(iterTriple, init, func)
-  if func == nil then func, init = init, nil end  -- shift args if init not provided
-
-  local iter, state, control = iterTriple[1], iterTriple[2], iterTriple[3]
-  local acc, first = init, true 
-  for v1, v2, v3, v4, v5 in iter, state, control do
-    if first and init == nil then                 -- first element becomes initial value
-      acc, first = v1, false
-    else
-      acc = func(acc, v1, v2, v3, v4, v5)         -- accumulate
-    end
-  end
-
-  return acc
-end
-
--- ============================================================================
 -- Type Definitions
 -- ============================================================================
 local TD_MessageUtil                  = sdk.find_type_definition("app.MessageUtil")
@@ -124,7 +78,7 @@ local FN_SkillStabbingOnActivate      = TD_ConditionSkillStabbing:get_method("on
 local FN_SkillRyukiOnActivate         = TD_ConditionSkillRyuki:get_method("onActivate") or nil -- Convert Element tracking method
 local FN_BlastOnActivate              = TD_ConditionBlast:get_method("onActivate") or nil -- Blast explosion tracking method
 
--- Weakness Exploit/Mind's Eye tracking methods
+-- Damage calculation methods
 local FN_CalcStockDamage              = TD_cEnemyStockDamage:get_method("calcStockDamage(app.cEnemyStockDamage.cCalcDamage, app.cEnemyStockDamage.cPreCalcDamage, app.cEnemyStockDamage.cDamageRate, System.Boolean)")
 local FN_StockDamageDetail            = TD_cEnemyStockDamage:get_method("stockDamageDetail(app.HitInfo)")
 
@@ -305,10 +259,13 @@ local SkillUptime = {
     SEREGIOS_TENACITY_SKILL_ID = 217,
     MINDS_EYE_SKILL_ID = 19,
     WEX_SKILL_ID = 63,
-    WEX_CUSTOM_ID = 63001,
-    WEX_WOUND_CUSTOM_ID = 63002,
-    BURST_LV1_CUSTOM_ID = 115001,
-    BURST_LV2_CUSTOM_ID = 115002,
+    WEX_WOUND_CUSTOM_ID = 63.1,
+    BURST_LV1_CUSTOM_ID = 115.1,
+    BURST_LV2_CUSTOM_ID = 115.2,
+    FLAYER_SKILL_ID = 147,
+    BLAST_CUSTOM_SKILL_ID = 999011,
+    CONVERT_ELEMENT_SKILL_ID = 165,
+    NU_UDRAS_MUTINY_SKILL_ID = 155,
     MOVE_ACTIVE_GAP = 2.0,       -- seconds; gap threshold to close an activity segment for a move
     MOVE_TABLE_MAX_HEIGHT = 260, -- pixels; max height for Move Damage table before scrolling
     EPSILON = 0.0005,
@@ -793,6 +750,190 @@ local AccessKeyUtil = (function()
   return table
 end)()
 
+SkillUptime.Context = (function()
+  -- =========================================================
+  -- MonsterCombatContext (private constructor)
+  -- =========================================================
+
+  ---@param Id UniqueIndex
+  local function createMonsterCombatContext(Id)
+    -- private state & methods
+
+    ---@class HitzoneValues
+    ---@field fixed   number
+    ---@field raw     number
+    ---@field slash   number
+    ---@field blow    number
+    ---@field shot    number
+    ---@field fire    number
+    ---@field water   number
+    ---@field thunder number
+    ---@field ice     number
+    ---@field dragon  number
+
+    ---@alias DamageType "fixed" | "raw" | "slash" | "blow" | "shot" | "fire" | "water" | "thunder" | "ice" | "dragon"
+    ---@alias DamageValues table<DamageType, number>
+    
+    ---@type HitzoneValues
+    local DEFAULT_HITZONE_VALUES = {
+      fixed   = 100, -- 100 so that fixed damage isn't multiplied
+      raw     = 0,   -- set to slash, blunt, or shot depending on context
+      slash   = 0,
+      blow    = 0,
+      shot    = 0,
+      fire    = 0,
+      water   = 0,
+      thunder = 0,
+      ice     = 0,
+      dragon  = 0,
+    }
+
+    ---@param tbl table
+    local function shallowCopyTable(tbl) 
+      local copy = {}
+      for k, v in pairs(tbl) do copy[k] = v end
+      return copy
+    end
+
+    local function isValidHitzoneKey(key)
+      return DEFAULT_HITZONE_VALUES[key] ~= nil
+    end
+
+    -- keeps track off the last hit part's hitzone values
+    local lastHitzoneValues = shallowCopyTable(DEFAULT_HITZONE_VALUES)
+
+    -- Motion value of the last hit the monster received
+    local lastHitMotionValue = 0
+
+
+    -- holds methods that should be publicly accessible
+    return {
+
+      --- Get the Context's UniqueIndex
+      ---@return UniqueIndex
+      getId = function()
+        return Id
+      end;
+
+
+      --- Updates the hitzone values of the most recent hit
+      ---@param hzv HitzoneValues
+      setLastHitzoneValues = function(hzv)
+        if not hzv then return end
+
+        for k, v in pairs(hzv) do
+          if isValidHitzoneKey(k) and type(v) == "number" then
+            lastHitzoneValues[k] = v
+          end
+        end
+      end;
+
+
+      --- Returns a copy of the last hitzone values
+      ---@return HitzoneValues
+      getLastHitzoneValues = function()
+        return shallowCopyTable(lastHitzoneValues)
+      end;
+
+
+      --- Converts an attack profile into damage using last HZVs
+      ---@param damageValues DamageValues
+      ---@return number
+      calculateDamage = function(damageValues)
+        if not damageValues then return 0 end
+
+        local total = 0
+        for type, val in pairs(damageValues) do
+          local hzv = lastHitzoneValues[type] or 0
+          total = total + (val * hzv / 100)
+        end
+        return total
+      end;
+
+
+      --- Updates the recorded motion value of the most recent hit against a monster
+      ---@param mv number
+      setLastHitMotionValue = function(mv)
+        if mv then lastHitMotionValue = mv end
+      end;
+
+
+      --- Get the motion value that was most recently saved
+      ---@return number
+      getLastHitMotionValue = function()
+        return lastHitMotionValue
+      end;
+
+    }
+  end
+
+
+  -- =========================================================
+  -- CombatContext (manager)
+  -- =========================================================
+
+  -- private
+  local monsterContexts = {}
+
+  ---@alias UniqueIndexResolvable number | app.TARGET_ACCESS_KEY | app.cEnemyContext | app.cEnemyContextHolder | app.cEnemyStockDamage
+  ---@alias UniqueIndex number
+
+  --- gets the uniqueIndex even if it is deeply nested in other objects
+  ---@param input UniqueIndexResolvable
+  ---@return UniqueIndex | nil UniqueIndex
+  local function resolveUniqueIndex(input)
+    if not input then return nil end
+
+    -- 1) already a unique index
+    if type(input) == "number" then return input end
+
+    -- 2) TARGET_ACCESS_KEY
+    if input.UniqueIndex then return input.UniqueIndex end
+
+    -- 3) or cEnemyContext
+    if input.get_UniqueIndex then return input:get_UniqueIndex() end
+
+    -- 4) cEnemyContextHolder
+    if input._Em and input._Em.get_UniqueIndex then return input._Em:get_UniqueIndex() end
+
+    -- 5) cEnemyStockDamage
+    local ctx = input.get_Context and input:get_Context()
+    if ctx and ctx._Em and ctx._Em.get_UniqueIndex then return ctx._Em:get_UniqueIndex() end
+
+    -- 6) future extensions go here
+
+    return nil
+  end
+
+
+  -- public
+  return {
+
+    --- Retrieves or creates a monster combat context
+    ---@param uniqueIndexResolvable UniqueIndexResolvable
+    getMonsterContext = function(uniqueIndexResolvable)
+      local uid = assert(
+        resolveUniqueIndex(uniqueIndexResolvable),
+        SkillUptime.Const.PREFIX .. "Attempted to get monster context with an unresolvable UniqueIndex: " .. tostring(uniqueIndexResolvable)
+      )
+      
+      local ctx = monsterContexts[uid]
+      if not ctx then
+        ctx = createMonsterCombatContext(uid)
+        monsterContexts[uid] = ctx
+      end
+  
+      return ctx
+    end;
+  
+  
+    resetAll = function()
+      monsterContexts = {}
+    end;
+
+  }
+end)()
+
 -- ============================================================================
 -- Utility Functions
 -- ============================================================================
@@ -1186,6 +1327,16 @@ SkillUptime.Util.getEnumMap = (function()
   end)
 end)()
 
+---@overload fun(typeName: string)
+---@overload fun(initVal, typeName: string)
+SkillUptime.Util.newValueType = function(initVal, typeName)
+  -- support both overloads
+  if typeName == nil then typeName, initVal = initVal, nil end
+  
+  local val = ValueType.new(sdk.find_type_definition(typeName))
+  if initVal ~= nil then val.m_value = initVal end                    
+  return val
+end
 
 SkillUptime.Skills.resolve_name = function(skill_id, level)
   if not skill_id or skill_id < 0 then return "[INVALID_SKILL]" end
@@ -1199,15 +1350,14 @@ SkillUptime.Skills.resolve_name = function(skill_id, level)
   if skill_id == 999006 then return "Bad Blood" end
   if skill_id == 999007 then return "Whiteflame Torrent" end
   if skill_id == 999008 then return "Azure Bolt" end
-  if skill_id == 999009 then return "Flayer Proc" end
-  if skill_id == 999010 then return "Convert Element Proc" end
-  if skill_id == 999011 then return "Blast" end
   
   -- Custom names for specific stages of skills
-  if skill_id == SkillUptime.Const.WEX_CUSTOM_ID       then return SkillUptime.Skills.resolve_name(63) end
   if skill_id == SkillUptime.Const.WEX_WOUND_CUSTOM_ID then return SkillUptime.Skills.resolve_name(63) .. " (wound)" end
   if skill_id == SkillUptime.Const.BURST_LV1_CUSTOM_ID then return SkillUptime.Skills.resolve_name(115) .. " Lv1" end
   if skill_id == SkillUptime.Const.BURST_LV2_CUSTOM_ID then return SkillUptime.Skills.resolve_name(115) .. " Lv2" end
+
+  -- Custom names for tracked status effects (ex: blast)
+  if skill_id == SkillUptime.Const.BLAST_CUSTOM_SKILL_ID then return "Blast" end
 
   if SkillIDMax and skill_id >= SkillIDMax then return "[INVALID_SKILL]" end
 
@@ -1788,17 +1938,78 @@ SkillUptime.Hooks.onBeginSkillDischarge = function(args)
   SkillUptime.Event.set("AZURE_BOLT_PROCCED")
 end
 
-SkillUptime.Hooks.onSkillStabbingOnActivate = function(args)
-  SkillUptime.Event.set("FLAYER_PROC_PROCCED")
+---@param cb fun(ctxHodlder: app.cEnemyContextHolder, args: any[]): number?, number?
+---@return fun(arg: any[])
+SkillUptime.Hooks.BadConditionWithBossCtx = function(cb)
+  return function(args)
+    -- Setup and Guard Clauses
+    local badCondition = sdk.to_managed_object(args[2])
+    if not badCondition then return end
+
+    local key = badCondition._This
+    if not key then return end
+
+    local manageInfo = AccessKeyUtil.getEnemyManageInfo(key, false)
+    if not manageInfo then return end
+
+    local ctxHolder = manageInfo:get_Context()
+    if not ctxHolder then return end
+
+    local em = ctxHolder:get_Em()
+    if not em or not em:get_IsBoss() then return end
+
+    -- callback with hook specific logic
+    local skillID, damage = cb(ctxHolder, args)
+    if not skillID or not damage then return end
+
+    -- register damage received from callback
+    local pr  = SkillUptime.Procs
+    local idx = "STATUS:" .. tostring(skillID)
+
+    pr.types[idx]  = pr.types[idx] or "STATUS"
+    pr.names[idx]  = pr.names[idx] or SkillUptime.Skills.resolve_name(skillID)
+    pr.maxHit[idx] = math.max(pr.maxHit[idx] or 0, damage)
+    pr.damage[idx] = (pr.damage[idx] or 0) + damage
+    pr.hits[idx]   = (pr.hits[idx] or 0) + 1
+
+    SkillUptime.Damage.total = (SkillUptime.Damage.total or 0) + damage
+  end
 end
 
-SkillUptime.Hooks.onSkillRyukiOnActivate = function(args)
-  SkillUptime.Event.set("CONVERT_ELEMENT_PROC_PROCCED")
+---@param cb fun(ctxHodlder: app.cEnemyContextHolder, cHunterSkill: app.cHunterSkill, args: any[]): number?, number?
+---@return fun(arg: any[])
+SkillUptime.Hooks.BadConditionWithBossCtxAndHunSkill = function(cb)
+  return SkillUptime.Hooks.BadConditionWithBossCtx(function(ctxHolder, args)
+    local cHunterSkill = SkillUptime.Skills.get_hunter_skill()
+    if not cHunterSkill then return end
+    return cb(ctxHolder, cHunterSkill, args)
+  end)
 end
 
-SkillUptime.Hooks.onBlastOnActivate = function(args)
-  SkillUptime.Event.set("BLAST_PROCCED")
-end
+SkillUptime.Hooks.onSkillStabbingOnActivate =
+  SkillUptime.Hooks.BadConditionWithBossCtxAndHunSkill(function(ctxHolder, cHunterSkill)
+    local damage = cHunterSkill:getSkillStabbingAddDamage(ctxHolder)
+    return SkillUptime.Const.FLAYER_SKILL_ID, damage
+  end)
+
+SkillUptime.Hooks.onSkillRyukiOnActivate =
+  SkillUptime.Hooks.BadConditionWithBossCtxAndHunSkill(function(ctxHolder, cHunterSkill)
+    local fixed  = SkillUptime.Util.newValueType(0, "System.Single")
+    local dragon = SkillUptime.Util.newValueType(0, "System.Single")
+    cHunterSkill:getSkillRyukiAddDamage(ctxHolder, fixed:address(), dragon:address())
+
+    local damage = SkillUptime.Context.getMonsterContext(ctxHolder).calculateDamage({
+      fixed = fixed.m_value,
+      dragon = dragon.m_value
+    })
+    return SkillUptime.Const.CONVERT_ELEMENT_SKILL_ID, damage
+  end)
+
+SkillUptime.Hooks.onBlastOnActivate =
+  SkillUptime.Hooks.BadConditionWithBossCtx(function()
+    return SkillUptime.Const.BLAST_CUSTOM_SKILL_ID, 150
+  end)
+
 
 SkillUptime.Hooks.onRequestDamageGUI = (function()
   local Event = SkillUptime.Event
@@ -1896,19 +2107,6 @@ SkillUptime.Hooks.onRequestDamageGUI = (function()
     Event.clear("EXTRAHIT_PROCS")
   end
 
-  local function handleStatusProc(damage)
-    local procEvent = Event.getActiveEvents("STATUS_PROCS")[1]
-    local skillID = Event.getMeta(procEvent).skillID
-    local register = procRegister("STATUS", skillID)
-
-    register.incHits()
-    register.maxHit(damage)
-    register.addDamage(damage)
-    SkillUptime.Damage.total = (SkillUptime.Damage.total or 0) + damage
-
-    Event.clear(procEvent)
-  end
-
   -- args:
   -- 3: unk1 [via.vec3]
   -- 4: damage [System.Single]
@@ -1924,15 +2122,13 @@ SkillUptime.Hooks.onRequestDamageGUI = (function()
     local stateValToName = SkillUptime.Util.getEnumMap(TD_GUI_State)
     local state = stateValToName[SkillUptime.Util.to_uint32(args[5])]
     local isExtraHit = state == "EXTRAHIT"
-    local isStatusProc = state ~= "EXTRAHIT" and SkillUptime.Event.isAnyActive("STATUS_PROCS")
     
-    if not (isExtraHit or isStatusProc) then return end
+    if not isExtraHit then return end
     
     local damage = sdk.to_float(args[4])
     SkillUptime.Util.logDebug("damage: " .. math.floor(damage))
     
-    if isExtraHit   then handleExtraHitProc(damage) end
-    if isStatusProc then handleStatusProc(damage) end
+    handleExtraHitProc(damage)
   end
 end)();
 
@@ -1941,6 +2137,9 @@ end)();
 
   -- stockDamageDetail(app.HitInfo)
   SkillUptime.Hooks.onStockDamageDetail = function(args)
+  local this = sdk.to_managed_object(args[2])
+  if not this then return end
+
     local hitInfo = sdk.to_managed_object(args[3])
     local hitOwner = hitInfo:getActualAttackOwner()
 
@@ -1952,8 +2151,11 @@ end)();
 
     if hitOwner ~= (playerGO or playerChar) then return end
 
+    -- Get the attacks motion value and save it
     local attackData = hitInfo:get_AttackData()
-    motionValue = attackData and attackData._OriginalAttackAdjust or 0
+    local motionValue = attackData and attackData._OriginalAttackAdjust or 0
+
+    SkillUptime.Context.getMonsterContext(this).setLastHitMotionValue(motionValue)
   end
 
   -- calcStockDamage(app.cEnemyStockDamage.cCalcDamage, app.cEnemyStockDamage.cPreCalcDamage, app.cEnemyStockDamage.cDamageRate, System.Boolean)
@@ -1973,22 +2175,27 @@ end)();
     local enemyCtx = this:get_Context():get_Em()
     if not enemyCtx:get_IsBoss() then return end
 
-    local function meatToHzv(meat, actionType) return {
-      raw = meat:getActionMeat(actionType),
-      fire = meat._Fire,
-      water = meat._Water,
-      thunder = meat._Thunder,
-      ice = meat._Ice,
-      dragon = meat._Dragon,
-      stun = meat._Stun
-    } end
+    local function meatToHzv(meat, actionType)
+      ---@type HitzoneValues
+      return {
+        fixed = 100,
+        raw = meat:getActionMeat(actionType),
+        slash = meat._Slash,
+        blow = meat._Blow,
+        shot = meat._Shot,
+        fire = meat._Fire,
+        water = meat._Water,
+        thunder = meat._Thunder,
+        ice = meat._Ice,
+        dragon = meat._Dragon,
+      }
+    end
 
     -- get the hitzone values
     local meatIndex = preCalcDmg.Common.MeatIndex._Value
     local actionType = preCalcDmg.ActionType
     local meatArray = enemyCtx.Parts._ParamParts._MeatArray._DataArray
     local meat = meatArray[meatIndex]
-    local hzv = meatToHzv(meat, actionType)
 
     -- get the unwounded hitzone values
     local partsArray = enemyCtx.Parts._ParamParts._PartsArray._DataArray
@@ -2000,24 +2207,28 @@ end)();
     local unwoundedMeat = meatArray[meatUnwoundedIndex]
     local unwoundedHzv = meatToHzv(unwoundedMeat, actionType)
 
-    -- get if is a wound hit
+    -- get if it's' a wound hit
     local scarIndex = preCalcDmg.Common.ScarIndex
     local scar = scarIndex ~= -1 and enemyCtx.Scar._ScarParts:Get(scarIndex) or nil
     local isHitWound = scar and scar:get_State() == 2 or false
 
-    -- get if certain skills are active
+    -- get if WEX or Mind's Eye are active
     local WEX_ID = SkillUptime.Const.WEX_SKILL_ID
-    local WEX_CUSTOM_ID = SkillUptime.Const.WEX_CUSTOM_ID
     local WEX_WOUND_ID = SkillUptime.Const.WEX_WOUND_CUSTOM_ID
     local MINDS_EYE_ID = SkillUptime.Const.MINDS_EYE_SKILL_ID
     local hunterSkill = hunterCharacter:get_HunterSkill()
     local isWexActive = hunterSkill:checkSkillActive(WEX_ID)
     local isMindsEyeActive = hunterSkill:checkSkillActive(MINDS_EYE_ID)
 
+    -- save and retreive values from monster context
+    local ctx = SkillUptime.Context.getMonsterContext(enemyCtx)
+    local motionValue = ctx.getLastHitMotionValue()
+    ctx.setLastHitzoneValues(meatToHzv(meat, actionType))
+
     -- Handle Weakness Exploit and Mind's eye skill uptime.
     if unwoundedHzv.raw >= 45 and isWexActive then
-      SkillUptime.Skills.hits_up[WEX_CUSTOM_ID] = (SkillUptime.Skills.hits_up[WEX_CUSTOM_ID] or 0) + 1
-      SkillUptime.Skills.mv_up[WEX_CUSTOM_ID]   = (SkillUptime.Skills.mv_up[WEX_CUSTOM_ID]   or 0) + motionValue
+      SkillUptime.Skills.hits_up[WEX_ID] = (SkillUptime.Skills.hits_up[WEX_ID] or 0) + 1
+      SkillUptime.Skills.mv_up[WEX_ID]   = (SkillUptime.Skills.mv_up[WEX_ID]   or 0) + motionValue
 
       if isHitWound then
         SkillUptime.Skills.hits_up[WEX_WOUND_ID] = (SkillUptime.Skills.hits_up[WEX_WOUND_ID] or 0) + 1
@@ -2050,6 +2261,9 @@ SkillUptime.Hooks.onQuestEnter = function()
   -- reset events
   SkillUptime.Event.clear("EXTRAHIT_PROCS", "STATUS_PROCS")
 
+  -- reset monster contexts
+  SkillUptime.Context.resetAll()
+  
   -- Auto-close config on quest start if enabled in settings
   if config.autoClose then
     config.open = false
