@@ -112,7 +112,8 @@ local SkillUptime = {
     defs = {
       { label = "In combat",                mode = "IN_COMBAT",     showBattleHeader = true,  accumulateTime = true },
       { label = "Hits (up/total)",          mode = "HITS",          showBattleHeader = false, accumulateTime = false },
-      { label = "Motion Values (up/total)", mode = "MOTION_VALUES", showBattleHeader = false, accumulateTime = false }
+      { label = "Motion Values (up/total)", mode = "MOTION_VALUES", showBattleHeader = false, accumulateTime = false },
+      { label = "MV x HZV (up/total)",      mode = "MV_X_HZV",      showBattleHeader = false, accumulateTime = false },
     },
     labels = {},
   },
@@ -124,6 +125,7 @@ local SkillUptime = {
     name_cache = {},
     hits_up = {},
     mv_up = {},
+    mvxhzv_up = {},
     InfoFields = {
       -- All cInfo fields from cHunterSkillParamInfo that contain skill data
       "_ToishiBoostInfo",         -- Sharpness Management
@@ -170,6 +172,7 @@ local SkillUptime = {
     uptime = {},
     hits_up = {},
     mv_up = {},
+    mvxhzv_up = {},
     name_cache = {},
     ItemIDs = {
       Kairiki = 125,
@@ -232,10 +235,20 @@ local SkillUptime = {
     maxHit = {},
     types = {},
   },
-  Flags    = { names = {}, data = {}, timing_starts = {}, uptime = {}, hits_up = {}, mv_up = {}, lastTick = nil },
+  Flags    = { 
+    names = {}, 
+    data = {}, 
+    timing_starts = {}, 
+    uptime = {}, 
+    hits_up = {}, 
+    mv_up = {}, 
+    mvxhzv_up = {}, 
+    lastTick = nil,
+  },
   Hits     = { total = 0 },
   Damage   = { total = 0 },
   MV       = { total = 0},
+  MVxHZV   = { total = 0},
   Const    = {
     COLOR_RED = 0xFF0000FF,
     COLOR_GREEN = 0xFF00FF00,
@@ -547,6 +560,10 @@ SkillUptime.Context = (function()
     -- Motion value of the last hit the monster received
     local lastHitMotionValue = 0
 
+    -- MV x HZV of the last hit the monster received
+    -- This is a calculated value, and takes Mind's Eye into account
+    local lastHitMVxHZV = 0
+
 
     -- holds methods that should be publicly accessible
     return {
@@ -604,6 +621,20 @@ SkillUptime.Context = (function()
       ---@return number
       getLastHitMotionValue = function()
         return lastHitMotionValue
+      end;
+
+
+      --- Updates the recorded MV x HZV of the most recent hit against a monster
+      ---@param mvxhzv number
+      setLastHitMVxHZV = function(mvxhzv)
+        if mvxhzv then lastHitMVxHZV = mvxhzv end
+      end;
+
+
+      --- Get the MV x HZV that was most recently saved
+      ---@return number
+      getLastHitMVxHZV = function()
+        return lastHitMVxHZV
       end;
 
     }
@@ -1784,33 +1815,42 @@ SkillUptime.Hooks.onCalcStockDamage = function(args)
   local motionValue = ctx.getLastHitMotionValue()
   ctx.setLastHitzoneValues(meatToHzv(meat, actionType))
 
+  -- calculate MV x HZV
+  local mindsEyeMult = (isMindsEyeActive and unwoundedHzv.raw < 45) and 1.3 or 1
+  local MVxHZV = ctx.calculateDamage({ raw = motionValue }) * mindsEyeMult
+  ctx.setLastHitMVxHZV(MVxHZV)
+
   -- Handle Weakness Exploit and Mind's eye skill uptime.
   if unwoundedHzv.raw >= 45 and isWexActive then
-    SkillUptime.Skills.hits_up[WEX_ID] = (SkillUptime.Skills.hits_up[WEX_ID] or 0) + 1
-    SkillUptime.Skills.mv_up[WEX_ID]   = (SkillUptime.Skills.mv_up[WEX_ID]   or 0) + motionValue
+    SkillUptime.Skills.hits_up[WEX_ID]   = (SkillUptime.Skills.hits_up[WEX_ID] or 0) + 1
+    SkillUptime.Skills.mv_up[WEX_ID]     = (SkillUptime.Skills.mv_up[WEX_ID]   or 0) + motionValue
+    SkillUptime.Skills.mvxhzv_up[WEX_ID] = (SkillUptime.Skills.mvxhzv_up[WEX_ID]   or 0) + MVxHZV
 
     if isHitWound then
-      SkillUptime.Skills.hits_up[WEX_WOUND_ID] = (SkillUptime.Skills.hits_up[WEX_WOUND_ID] or 0) + 1
-      SkillUptime.Skills.mv_up[WEX_WOUND_ID]   = (SkillUptime.Skills.mv_up[WEX_WOUND_ID]   or 0) + motionValue
+      SkillUptime.Skills.hits_up[WEX_WOUND_ID]   = (SkillUptime.Skills.hits_up[WEX_WOUND_ID] or 0) + 1
+      SkillUptime.Skills.mv_up[WEX_WOUND_ID]     = (SkillUptime.Skills.mv_up[WEX_WOUND_ID]   or 0) + motionValue
+      SkillUptime.Skills.mvxhzv_up[WEX_WOUND_ID] = (SkillUptime.Skills.mvxhzv_up[WEX_WOUND_ID]   or 0) + MVxHZV
     end
   elseif unwoundedHzv.raw < 45 and isMindsEyeActive then
-    SkillUptime.Skills.hits_up[MINDS_EYE_ID] = (SkillUptime.Skills.hits_up[MINDS_EYE_ID] or 0) + 1
-    SkillUptime.Skills.mv_up[MINDS_EYE_ID]   = (SkillUptime.Skills.mv_up[MINDS_EYE_ID]   or 0) + motionValue
+    SkillUptime.Skills.hits_up[MINDS_EYE_ID]   = (SkillUptime.Skills.hits_up[MINDS_EYE_ID] or 0) + 1
+    SkillUptime.Skills.mv_up[MINDS_EYE_ID]     = (SkillUptime.Skills.mv_up[MINDS_EYE_ID]   or 0) + motionValue
+    SkillUptime.Skills.mvxhzv_up[MINDS_EYE_ID] = (SkillUptime.Skills.mvxhzv_up[MINDS_EYE_ID]   or 0) + MVxHZV
   end
 end
 
 
 SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Battle.active = false; SkillUptime.Battle.start = 0.0; SkillUptime.Battle.total = 0.0
-  SkillUptime.Skills.uptime = {}; SkillUptime.Skills.running = {}; SkillUptime.Skills.timing_starts = {}; SkillUptime.Skills.hits_up = {}; SkillUptime.Skills.mv_up = {}; SkillUptime.Skills.name_cache = {}
-  SkillUptime.Items.uptime = {}; SkillUptime.Items.timing_starts = {}; SkillUptime.Items.data = {}; SkillUptime.Items.hits_up = {}; SkillUptime.Items.mv_up = {}
-  SkillUptime.Flags.uptime = {}; SkillUptime.Flags.timing_starts = {}; SkillUptime.Flags.data = {}; SkillUptime.Flags.hits_up = {}; SkillUptime.Flags.mv_up = {}
+  SkillUptime.Skills.uptime = {}; SkillUptime.Skills.running = {}; SkillUptime.Skills.timing_starts = {}; SkillUptime.Skills.hits_up = {}; SkillUptime.Skills.mv_up = {}; SkillUptime.Skills.mvxhzv_up = {}; SkillUptime.Skills.name_cache = {}
+  SkillUptime.Items.uptime = {}; SkillUptime.Items.timing_starts = {}; SkillUptime.Items.data = {}; SkillUptime.Items.hits_up = {}; SkillUptime.Items.mv_up = {}; SkillUptime.Items.mvxhzv_up = {}
+  SkillUptime.Flags.uptime = {}; SkillUptime.Flags.timing_starts = {}; SkillUptime.Flags.data = {}; SkillUptime.Flags.hits_up = {}; SkillUptime.Flags.mv_up = {}; SkillUptime.Flags.mvxhzv_up = {}
   SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
   SkillUptime.Procs.damage = {}; SkillUptime.Procs.hits = {}; SkillUptime.Procs.names = {}; SkillUptime.Procs.maxHit = {};
   SkillUptime.Damage.total = 0
   SkillUptime.Hits.total = 0
   SkillUptime.MV.total = 0
+  SkillUptime.MVxHZV.total = 0
 
   -- reset monster contexts
   SkillUptime.Context.resetAll()
@@ -1845,10 +1885,11 @@ SkillUptime.Hooks.reset_all = function()
   for _, rec in pairs(SkillUptime.Status and SkillUptime.Status.SkillData or {}) do
     rec.Activated = false; rec.Timer = 0
   end
-  SkillUptime.Hits.total = 0; SkillUptime.Skills.hits_up = {}; SkillUptime.Items.hits_up = {}; SkillUptime.Flags.hits_up = {}
-  SkillUptime.MV.total = 0;   SkillUptime.Skills.mv_up = {};   SkillUptime.Items.mv_up = {};   SkillUptime.Flags.mv_up = {}
-  SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
-  SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
+  SkillUptime.Hits.total = 0;    SkillUptime.Skills.hits_up = {};   SkillUptime.Items.hits_up = {};   SkillUptime.Flags.hits_up = {}
+  SkillUptime.MV.total = 0;      SkillUptime.Skills.mv_up = {};     SkillUptime.Items.mv_up = {};     SkillUptime.Flags.mv_up = {}
+  SkillUptime.MVxHZV.total = 0;  SkillUptime.Skills.mvxhzv_up = {}; SkillUptime.Items.mvxhzv_up = {}; SkillUptime.Flags.mvxhzv_up = {}
+  SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {};       SkillUptime.Moves.names = {};     SkillUptime.Moves.total = 0;
+  SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {};    SkillUptime.Moves.maxHit = {}
   SkillUptime.Util.logDebug("Manual reset requested")
 end
 
@@ -1904,10 +1945,12 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   ---------------------------------------------------------------------------------------
   local monCtx = SkillUptime.Context.getMonsterContext(ctx)
   local atkData = hitInfo:get_AttackData()
-  local motionValue = atkData and atkData._OriginalAttackAdjust or 0
+  local motionValue = monCtx.getLastHitMotionValue()
+  local MVxHZV = monCtx.getLastHitMVxHZV()
 
   -- Update tracker totals --------------------------------------------------------------
   SkillUptime.MV.total = (SkillUptime.MV.total or 0) + motionValue
+  SkillUptime.MVxHZV.total = (SkillUptime.MVxHZV.total or 0) + MVxHZV
   SkillUptime.Hits.total = (SkillUptime.Hits.total or 0) + 1
   SkillUptime.Damage.total = (SkillUptime.Damage.total or 0) + final
   SkillUptime.Util.logDebug(string.format("Player hit registered! Total hits: %d, Damage: %.0f", SkillUptime.Hits.total,
@@ -1964,15 +2007,17 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   local counted = {}
   for sid, rec in pairs(SkillUptime.Status and SkillUptime.Status.SkillData or {}) do
     if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(sid)) then
-      SkillUptime.Skills.hits_up[sid] = (SkillUptime.Skills.hits_up[sid] or 0) + 1
-      SkillUptime.Skills.mv_up[sid]   = (SkillUptime.Skills.mv_up[sid]   or 0) + motionValue
+      SkillUptime.Skills.hits_up[sid]   = (SkillUptime.Skills.hits_up[sid] or 0) + 1
+      SkillUptime.Skills.mv_up[sid]     = (SkillUptime.Skills.mv_up[sid]   or 0) + motionValue
+      SkillUptime.Skills.mvxhzv_up[sid] = (SkillUptime.Skills.mvxhzv_up[sid]   or 0) + MVxHZV
       counted[sid] = true
     end
   end
   for sid, on in pairs(SkillUptime.Skills.running or {}) do
     if on and (not SkillUptime.Skills.is_excluded_skill(sid)) and not counted[sid] then
-      SkillUptime.Skills.hits_up[sid] = (SkillUptime.Skills.hits_up[sid] or 0) + 1
-      SkillUptime.Skills.mv_up[sid]   = (SkillUptime.Skills.mv_up[sid]   or 0) + motionValue
+      SkillUptime.Skills.hits_up[sid]   = (SkillUptime.Skills.hits_up[sid] or 0) + 1
+      SkillUptime.Skills.mv_up[sid]     = (SkillUptime.Skills.mv_up[sid]   or 0) + motionValue
+      SkillUptime.Skills.mvxhzv_up[sid] = (SkillUptime.Skills.mvxhzv_up[sid]   or 0) + MVxHZV
       counted[sid] = true
     end
   end
@@ -1980,16 +2025,18 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   -- 2. Attribute to active item buffs --------------------------------------------------
   for name, rec in pairs(SkillUptime.Items.data or {}) do
     if rec and rec.Activated then
-      SkillUptime.Items.hits_up[name] = (SkillUptime.Items.hits_up[name] or 0) + 1
-      SkillUptime.Items.mv_up[name]   = (SkillUptime.Items.mv_up[name]   or 0) + motionValue
+      SkillUptime.Items.hits_up[name]   = (SkillUptime.Items.hits_up[name] or 0) + 1
+      SkillUptime.Items.mv_up[name]     = (SkillUptime.Items.mv_up[name]   or 0) + motionValue
+      SkillUptime.Items.mvxhzv_up[name] = (SkillUptime.Items.mvxhzv_up[name]   or 0) + MVxHZV
     end
   end
 
   -- 3. Attribute to active status flags ------------------------------------------------
   for fid, rec in pairs(SkillUptime.Flags.data or {}) do
     if rec and rec.Activated then
-      SkillUptime.Flags.hits_up[fid] = (SkillUptime.Flags.hits_up[fid] or 0) + 1
-      SkillUptime.Flags.mv_up[fid]   = (SkillUptime.Flags.mv_up[fid]   or 0) + motionValue
+      SkillUptime.Flags.hits_up[fid]   = (SkillUptime.Flags.hits_up[fid] or 0) + 1
+      SkillUptime.Flags.mv_up[fid]     = (SkillUptime.Flags.mv_up[fid]   or 0) + motionValue
+      SkillUptime.Flags.mvxhzv_up[fid] = (SkillUptime.Flags.mvxhzv_up[fid]   or 0) + MVxHZV
     end
   end
 
@@ -2093,12 +2140,17 @@ SkillUptime.UI.draw = function()
     local id_set = {}
     local useHits = (strategy.mode == "HITS")
     local useMVs = (strategy.mode == "MOTION_VALUES")
+    local useMVxHZV = (strategy.mode == "MV_X_HZV")
     if useHits then
       for id, cnt in pairs(SkillUptime.Skills.hits_up or {}) do if (cnt or 0) > 0 and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
       for id, rec in pairs(SkillUptime.Status.SkillData or {}) do if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
       for id, on in pairs(SkillUptime.Skills.running or {}) do if on and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
     elseif useMVs then
       for id, cnt in pairs(SkillUptime.Skills.mv_up or {}) do if (cnt or 0) > 0 and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+      for id, rec in pairs(SkillUptime.Status.SkillData or {}) do if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+      for id, on in pairs(SkillUptime.Skills.running or {}) do if on and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
+    elseif useMVxHZV then
+      for id, cnt in pairs(SkillUptime.Skills.mvxhzv_up or {}) do if (cnt or 0) > 0 and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
       for id, rec in pairs(SkillUptime.Status.SkillData or {}) do if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
       for id, on in pairs(SkillUptime.Skills.running or {}) do if on and (not SkillUptime.Skills.is_excluded_skill(id)) then id_set[id] = true end end
     else
@@ -2125,6 +2177,9 @@ SkillUptime.UI.draw = function()
         elseif useMVs then
           if config.columns.primary then imgui.table_setup_column("Motion Values (up/total)") end
           if config.columns.percent then imgui.table_setup_column("Motion Value Uptime (%)") end
+        elseif useMVxHZV then
+          if config.columns.primary then imgui.table_setup_column("MV x HZV (up/total)") end
+          if config.columns.percent then imgui.table_setup_column("MV x HZV Uptime (%)") end
         else
           if config.columns.primary then imgui.table_setup_column("Uptime") end
           if config.columns.percent then imgui.table_setup_column("Uptime (%)") end
@@ -2140,7 +2195,7 @@ SkillUptime.UI.draw = function()
           end
           local total = base + live
           local display = true
-          if (not (useHits or useMVs)) and (total <= epsilon) then display = false end
+          if (not (useHits or useMVs or useMVxHZV)) and (total <= epsilon) then display = false end
           if display then
             local name = SkillUptime.Skills.name_cache[id] or SkillUptime.Skills.resolve_name(id, 1); SkillUptime.Skills.name_cache[id] =
                 name
@@ -2170,6 +2225,18 @@ SkillUptime.UI.draw = function()
               end
               if config.columns.percent then
                 imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", mvPct)); col = col + 1
+              end
+            elseif useMVxHZV then
+              local up = SkillUptime.Skills.mvxhzv_up[id] or 0
+              local totMVxHZV = SkillUptime.MVxHZV.total or 0
+              local mvxhzvPct = (totMVxHZV > 0) and (up / totMVxHZV * 100.0) or 0.0
+              if config.columns.primary then
+                imgui.table_set_column_index(col);
+                if totMVxHZV > 0 then imgui.text(string.format("%.0f/%.0f", up, totMVxHZV)) else imgui.text("—") end
+                col = col + 1
+              end
+              if config.columns.percent then
+                imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", mvxhzvPct)); col = col + 1
               end
             else
               local pct = (elapsed > 0) and (total / elapsed * 100.0) or 0.0
@@ -2207,6 +2274,7 @@ SkillUptime.UI.draw = function()
     local itemRows = {}
     local useHits = (strategy.mode == "HITS")
     local useMVs = (strategy.mode == "MOTION_VALUES")
+    local useMVxHZV = (strategy.mode == "MV_X_HZV")
 
     for key, rec in pairs(SkillUptime.Items.data or {}) do
       local base = SkillUptime.Items.uptime[key] or 0.0
@@ -2219,10 +2287,11 @@ SkillUptime.UI.draw = function()
       local total = base + live
       local hits = SkillUptime.Items.hits_up[key] or 0
       local mvs = SkillUptime.Items.mv_up[key] or 0
+      local mvxhzvs = SkillUptime.Items.mvxhzv_up[key] or 0
       local active = rec.Activated and true or false
 
-      -- Show item if it has uptime, hits, motion values (mvs), or is currently active
-      if total > epsilon or hits > 0 or mvs > 0 or active then
+      -- Show item if it has uptime, hits, motion values (mvs), MV x HZVs, or is currently active
+      if total > epsilon or hits > 0 or mvs > 0 or mvxhzvs > 0 or active then
         table.insert(itemRows, {
           key = key,
           name = rec.Name or tostring(key),
@@ -2250,6 +2319,9 @@ SkillUptime.UI.draw = function()
         elseif useMVs then
           if config.columns.primary then imgui.table_setup_column("Motion Values (up/total)") end
           if config.columns.percent then imgui.table_setup_column("Motion Value Uptime (%)") end
+        elseif useMVxHZV then
+          if config.columns.primary then imgui.table_setup_column("MV x HZV (up/total)") end
+          if config.columns.percent then imgui.table_setup_column("MV x HZV Uptime (%)") end
         else
           if config.columns.primary then imgui.table_setup_column("Uptime") end
           if config.columns.percent then imgui.table_setup_column("Uptime (%)") end
@@ -2284,6 +2356,18 @@ SkillUptime.UI.draw = function()
             end
             if config.columns.percent then
               imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", mvPct)); col = col + 1
+            end
+          elseif useMVxHZV then
+            local up = SkillUptime.Items.mvxhzv_up[row.key] or 0
+            local totMVxHZV = SkillUptime.MVxHZV.total or 0
+            local mvxhzvPct = (totMVxHZV > 0) and (up / totMVxHZV * 100.0) or 0.0
+            if config.columns.primary then
+              imgui.table_set_column_index(col);
+              if totMVxHZV > 0 then imgui.text(string.format("%.0f/%.0f", up, totMVxHZV)) else imgui.text("—") end
+              col = col + 1
+            end
+            if config.columns.percent then
+              imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", mvxhzvPct)); col = col + 1
             end
           else
             local pct = (elapsed > 0) and (row.total / elapsed * 100.0) or 0.0
@@ -2324,6 +2408,7 @@ SkillUptime.UI.draw = function()
     if #flagRows > 0 then
       local useHits = (strategy.mode == "HITS")
       local useMVs = (strategy.mode == "MOTION_VALUES")
+      local useMVxHZV = (strategy.mode == "MV_X_HZV")
       local colCount3 = 1
       if config.columns.primary then colCount3 = colCount3 + 1 end
       if config.columns.percent then colCount3 = colCount3 + 1 end
@@ -2337,6 +2422,9 @@ SkillUptime.UI.draw = function()
         elseif useMVs then
           if config.columns.primary then imgui.table_setup_column("Motion Values (up/total)") end
           if config.columns.percent then imgui.table_setup_column("Motion Value Uptime (%)") end
+        elseif useMVxHZV then
+          if config.columns.primary then imgui.table_setup_column("MV x HZV (up/total)") end
+          if config.columns.percent then imgui.table_setup_column("MV x HZV Uptime (%)") end
         else
           if config.columns.primary then imgui.table_setup_column("Uptime") end
           if config.columns.percent then imgui.table_setup_column("Uptime (%)") end
@@ -2375,6 +2463,20 @@ SkillUptime.UI.draw = function()
             end
             if config.columns.percent then
               imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", mvPct)); col = col + 1
+            end
+          elseif useMVxHZV then
+            local up = SkillUptime.Flags.mvxhzv_up[row.key] or 0
+            local totMVxHZV = SkillUptime.MVxHZV.total or 0
+            local mvxhzvPct = (totMVxHZV > 0) and (up / totMVxHZV * 100.0) or 0.0
+            if config.columns.primary then
+              imgui.table_set_column_index(col); if totMVxHZV > 0 then
+                imgui.text(string.format("%.0f/%.0f", up, totMVxHZV))
+              else
+                imgui.text("—")
+              end; col = col + 1
+            end
+            if config.columns.percent then
+              imgui.table_set_column_index(col); imgui.text(string.format("%.1f%%", mvxhzvPct)); col = col + 1
             end
           else
             local pct = (elapsed > 0) and (row.total / elapsed * 100.0) or 0.0
