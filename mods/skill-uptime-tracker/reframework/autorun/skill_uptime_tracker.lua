@@ -26,9 +26,6 @@ local TD_HunterSkillUpdater           = sdk.find_type_definition("app.HunterSkil
 local TD_ItemDef                      = sdk.find_type_definition("app.ItemDef")
 local TD_ActionGuideID                = sdk.find_type_definition("app.ActionGuideID")
 local TD_cEnemyStockDamage            = sdk.find_type_definition("app.cEnemyStockDamage")
-local TD_DamageGui                    = sdk.find_type_definition("app.GUI020020")
-local TD_GUI_State                    = sdk.find_type_definition("app.GUI020020.State")
-local TD_GUI_DamageType               = sdk.find_type_definition("app.GUI020020.DAMAGE_TYPE")
 local TD_ConditionSkillStabbing       = sdk.find_type_definition("app.cEnemyBadConditionSkillStabbing")
 local TD_ConditionSkillRyuki          = sdk.find_type_definition("app.cEnemyBadConditionSkillRyuki")
 local TD_ConditionBlast               = sdk.find_type_definition("app.cEnemyBadConditionBlast")
@@ -68,12 +65,7 @@ local FN_BeginResonanceFar            = TD_SkillParamInfo:get_method("beginReson
 local FN_BeginResonanceNearCriticalUp = TD_SkillParamInfo:get_method("beginResonanceNearCriticalUp") or nil
 local FN_BeginResonanceFarAttackUp    = TD_SkillParamInfo:get_method("beginResonanceFarAttackUp") or nil
 
--- Extra Damage tracking methods
-local FN_RequestDamageGUI             = TD_cEnemyStockDamage:get_method("requestDamageGUI(via.vec3, System.Single, app.GUI020020.State, System.Boolean, System.Nullable`1<app.TARGET_ACCESS_KEY>, System.Boolean, System.Boolean, app.GUI020020.CRITICAL_STATE, app.GUI020020.DAMAGE_TYPE, app.HitDef.COLLAB_DAMAGE_UI_TYPE)")
-local FN_BeginScorchingHeat           = TD_SkillParamInfo:get_method("beginScorchingHeat") or nil -- scorcher tracking method
-local FN_ApplayViolent                = TD_SkillParamInfo:get_method("applayViolent") or nil -- Bad Blood tracking method
-local FN_BeginRyukiExplosion          = TD_SkillParamInfo:get_method("beginRyukiExplosion") or nil -- Whiteflame Torrent tracking method
-local FN_BeginSkillDischarge          = TD_SkillParamInfo:get_method("beginSkillDischarge") or nil -- Azure Bolt tracking method
+-- Status tracking methods
 local FN_SkillStabbingOnActivate      = TD_ConditionSkillStabbing:get_method("onActivate") or nil -- flayer tracking method
 local FN_SkillRyukiOnActivate         = TD_ConditionSkillRyuki:get_method("onActivate") or nil -- Convert Element tracking method
 local FN_BlastOnActivate              = TD_ConditionBlast:get_method("onActivate") or nil -- Blast explosion tracking method
@@ -239,11 +231,6 @@ local SkillUptime = {
     names = {},
     maxHit = {},
     types = {},
-    extraHits = {
-    damage = {}, -- eventMask -> damage
-    hits = {}, -- eventMask -> hits
-    average = {}, -- eventMask -> average (only has extra hits that weren't combined)
-    },
   },
   Flags    = { names = {}, data = {}, timing_starts = {}, uptime = {}, hits_up = {}, mv_up = {}, lastTick = nil },
   Hits     = { total = 0 },
@@ -269,243 +256,14 @@ local SkillUptime = {
     MOVE_ACTIVE_GAP = 2.0,       -- seconds; gap threshold to close an activity segment for a move
     MOVE_TABLE_MAX_HEIGHT = 260, -- pixels; max height for Move Damage table before scrolling
     EPSILON = 0.0005,
-    -- Event Definitions that later get utilized with bit masks
-    --   - Events and Groups are both tables
-    --   - Groups may have a "meta" key, events must not
-    --   - Event metadata is the table itself, it may be empty
-    --   - A group's keys must all be ALL_CAPS, except "meta"
-    EVENT_DEFS = {
-      EXTRAHIT_PROCS = {
-        SCORCHER_PROCCED = { skillID = 999005, avg = 30 },
-        BAD_BLOOD_PROCCED = { skillID = 999006, avg = 20 },
-        WHITEFLAME_TORRENT_PROCCED = { skillID = 999007, avg = 60 },
-        AZURE_BOLT_PROCCED = { skillID = 999008, avg = 40 },
-      },
-      STATUS_PROCS = {
-        FLAYER_PROC_PROCCED = { skillID = 999009 },
-        CONVERT_ELEMENT_PROC_PROCCED = { skillID = 999010 },
-        BLAST_PROCCED = { skillID = 999011}
-      },
-    },
   },
   -- Ensure sub-namespaces exist before assigning functions
   Util     = {},
   Config   = {},
   Core     = {},
   Hooks    = {},
-  Event   = {},
+  Context  = {},
 }
-
--- ============================================================================
--- Event System
--- ============================================================================
-
--- closure
-(function()
-
-  -- ==========================================================================
-  -- Event Initialization
-  -- ==========================================================================
-
-  local Events = {}
-  local Groups = {}
-  local Meta = {}
-  local nextBit = 1
-  
-  local EventListeners = {}
-  local nextListenerId = 1
-  
-  local EventToName = {}
-  local GroupToName = {}
-  
-  -- Internal state for active events
-  local EventState = 0
-
-  -- defines a new event, ensuring uniqueness
-  local function defineEvent(name, metadata)
-    if not Events[name] then
-      local bit = nextBit
-      nextBit = nextBit << 1
-
-      Meta[name] = metadata or {}
-      Events[name] = bit
-      EventToName[bit] = name
-    end
-    return Events[name]
-  end
-
-  local function isCapsKey(k)
-    return type(k) == "string" and k:match("^[A-Z0-9_-]+$") ~= nil
-  end
-
-  local function isGroupTable(t)
-    for k, v in pairs(t) do
-      if k ~= "meta" then
-        -- if table has lowercase keys, its not a group
-        if not isCapsKey(k) then return false end
-        -- if table values aren't sub tables like sub groups or events, it's not a group
-        if type(v) ~= "table" then return false end
-      end
-    end  
-
-    -- if table is not empty it's a group, since an empty table is an event
-    return next(t) ~= nil
-  end
-
-  -- recursively process event group definitions
-  -- groups can contain both events and sub groups
-  local function processGroup(groupName, groupDef)
-
-    local mask = reduce({pairs(groupDef)}, 0, function(mask, key, value)
-      if key == "meta" then return mask end
-      if isGroupTable(value) then return mask | processGroup(key, value) end
-      return mask | defineEvent(key, value)        
-    end)
-
-    Meta[groupName] = groupDef.meta or {}
-    Groups[groupName] = mask
-    GroupToName[mask] = groupName
-
-    return mask
-  end
-
-  -- INITIALIZATION: process the top level group and name it "EVENTS"
-  processGroup("EVENTS", SkillUptime.Const.EVENT_DEFS)
-
-  -- ==========================================================================
-  -- Event Helper Functions
-  -- ==========================================================================
-
-  -- private
-  local function nameToMask(name)
-    local bit = Events[name]
-    local mask = Groups[name]
-
-    if bit or mask then return bit or mask end
-
-    if not bit then
-      SkillUptime.Util.logError("Unknown Event: " .. tostring(eventName))
-    elseif not mask then
-      SkillUptime.Util.logError("Unknown Event Group: " .. tostring(groupName))
-    end
-
-    -- returns a "neutral" 0 value instead of nil if nothing matches.
-    return 0
-  end
-
-  local function namesToMask(...)
-    return reduce({ivalues({...})}, 0, function(mask, name) return mask | nameToMask(name) end)
-  end
-
-  local function maskToEventBits(mask)
-    local events = {}
-    local bit = 1
-
-    while mask ~= 0 do
-      if (mask & bit) ~= 0 then
-        events[#events+1] = bit
-        mask = mask & ~bit -- clear this bit
-      end
-      bit = bit << 1 -- check next bit
-    end
-
-    return events
-  end
-
-  -- public
-  SkillUptime.Event.resetAll = function() EventState = 0 end
-  SkillUptime.Event.snapshot = function() return EventState end
-  SkillUptime.Event.restore = function(mask) EventState = mask or 0 end
-
-  SkillUptime.Event.set = function(name, ...)
-    local mask = namesToMask(name, ...)
-    EventState = EventState | mask
-
-    -- trigger listeners
-    for listener in values(EventListeners) do
-      if (listener.mask & mask) ~= 0 then
-        listener.callback(name, Meta[name], mask)
-      end
-    end
-  end
-
-  SkillUptime.Event.clear = function(name, ...)
-    local mask = namesToMask(name, ...)
-    EventState = EventState & (~mask)
-  end
-
-  SkillUptime.Event.isActive = function(name, ...)
-    local mask = namesToMask(name, ...)
-    return (EventState & mask) ~= 0
-  end
-
-  -- alternate name, use depends on which is more clear when using them.
-  SkillUptime.Event.isAnyActive = SkillUptime.Event.isActive
-
-  SkillUptime.Event.areMultipleActive = function(name, ...)
-    local mask = namesToMask(name, ...)
-    local activeBits = EventState & mask
-    return (activeBits & (activeBits - 1)) ~= 0
-  end
-
-  SkillUptime.Event.areAllActive = function(name, ...)
-    local mask = namesToMask(name, ...)
-    return (EventState & mask) == mask
-  end
-
-  SkillUptime.Event.getMeta = function(name)
-    return Meta[name]
-  end
-
-  SkillUptime.Event.on = function(nameOrTableOfNames, callback)
-    local id = nextListenerId
-    nextListenerId = nextListenerId + 1
-
-    local mask = (function()
-      if type(nameOrTableOfNames) == "string" then return nameToMask(nameOrTableOfNames) end
-      if type(nameOrTableOfNames) == "table" then return namesToMask(table.unpack(nameOrTableOfNames)) end
-    end)() or 0
-
-    EventListeners[id] = { mask = mask, callback = callback }
-
-    return id
-  end
-
-  SkillUptime.Event.off = function(id)
-    EventListeners[id] = nil
-  end
-
-  SkillUptime.Event.toMask = function(name, ...)
-    return namesToMask(name, ...)
-  end
-
-  SkillUptime.Event.maskToEventBits = maskToEventBits
-
-  -- can be used together with snapshot to log all active events
-  --   print(table.concat(SkillUptime.Event.maskToEvents(SkillUptime.Event.snapshot), "\n"))
-  SkillUptime.Event.maskToEvents = function(mask)
-    local eventNames = {}
-    for i, bit in ipairs(maskToEventBits(mask)) do eventNames[i] = SkillUptime.Event.toString(bit) end
-    return eventNames
-  end
-
-  SkillUptime.Event.toString = function(mask)
-    local name = EventToName[mask] or GroupToName[mask]
-    
-    if not name then
-      SkillUptime.Util.logError("Mask: " .. tostring(mask) .. " does not exist as a event or group")
-    end
-
-    return name
-  end
-
-  -- name lets you filter the result list. name can be an event or group
-  SkillUptime.Event.getActiveEvents = function(name, ...)
-    local mask = namesToMask(name, ...)
-    return SkillUptime.Event.maskToEvents(EventState & mask)
-  end
-
-end)()
 
 -- ============================================================================
 -- Initialization & Data Tables
@@ -640,12 +398,6 @@ local FLAGS_NAME_MAP   = {
   [116] = "Max",
 }
 
--- populate extra hit default average damage
-for event in ivalues(SkillUptime.Event.maskToEvents(SkillUptime.Event.toMask("EXTRAHIT_PROCS"))) do
-  local idx = SkillUptime.Event.toMask(event)
-  SkillUptime.Procs.extraHits.average[idx] = SkillUptime.Event.getMeta(event).avg
-end
-
 local function generateEnum(typename)
   local t = sdk.find_type_definition(typename)
   if not t then return {} end
@@ -679,16 +431,6 @@ end
 
 ---@type app.TARGET_ACCESS_KEY.CATEGORY
 local CATEGORY = generateEnum("app.TARGET_ACCESS_KEY.CATEGORY")
-
----@class app.HitDef.ACTION_TYPE
----@field NONE 0
----@field SLASH 1
----@field BLOW 2
----@field SHOT 3
----@field MAX 4
-
----@type app.TARGET_ACCESS_KEY.CATEGORY
-local ACTION_TYPE = generateEnum("app.HitDef.ACTION_TYPE")
 
 ---@class AccessKeyUtil
 ---@field getPlayerManageInfo fun(key: TARGET_ACCESS_KEY, a: boolean, b: boolean): cPlayerManageInfo
@@ -743,7 +485,7 @@ local AccessKeyUtil = (function()
   local methods = TD_TargetAccessKeyUtil:get_methods()
   local table = {}
 
-  for method in ivalues(methods) do
+  for _, method in ipairs(methods) do
     table[method:get_name()] = function(...) return method:call(nil, ...) end
   end
 
@@ -1303,30 +1045,6 @@ SkillUptime.Util.derefPtr = function(ptr)
   return fake_int64 and fake_int64:get_field("m_value") or nil
 end
 
-SkillUptime.Util.getEnumMap = (function()
-  local enumCache = {}
-
-  return (function(enumTypeDef)
-    if enumCache[enumTypeDef] then return table.unpack(enumCache[enumTypeDef]) end
-
-    local fields = enumTypeDef:get_fields()
-    local valToName, nameToVal = {}, {}
-
-    for _, field in ipairs(fields) do
-      if field:is_static() then
-        local name = field:get_name()
-        local raw_value = field:get_data(nil)
-        valToName[raw_value] = name
-        nameToVal[name] = raw_value
-      end
-    end
-
-    enumCache[enumTypeDef] = { valToName, nameToVal }
-
-    return valToName, nameToVal
-  end)
-end)()
-
 ---@overload fun(typeName: string)
 ---@overload fun(initVal, typeName: string)
 SkillUptime.Util.newValueType = function(initVal, typeName)
@@ -1345,12 +1063,6 @@ SkillUptime.Skills.resolve_name = function(skill_id, level)
   if skill_id == 999003 then return "Resonance Near (Affinity)" end
   if skill_id == 999004 then return "Resonance Far (Attack)" end
 
-  -- Custom names for extra damage skills (custom skill IDs)
-  if skill_id == 999005 then return "Scorcher" end
-  if skill_id == 999006 then return "Bad Blood" end
-  if skill_id == 999007 then return "Whiteflame Torrent" end
-  if skill_id == 999008 then return "Azure Bolt" end
-  
   -- Custom names for specific stages of skills
   if skill_id == SkillUptime.Const.WEX_WOUND_CUSTOM_ID then return SkillUptime.Skills.resolve_name(63) .. " (wound)" end
   if skill_id == SkillUptime.Const.BURST_LV1_CUSTOM_ID then return SkillUptime.Skills.resolve_name(115) .. " Lv1" end
@@ -1910,34 +1622,6 @@ SkillUptime.Hooks.onResonanceFarAttackUp = function(args)
   end
 end
 
-SkillUptime.Hooks.onBeginScorchingHeat = function(args)
-  local this = sdk.to_managed_object(args[2])
-  if not this._IsMaster then return end
-
-  SkillUptime.Event.set("SCORCHER_PROCCED")
-end
-
-SkillUptime.Hooks.onApplayViolent = function(args)
-  local this = sdk.to_managed_object(args[2])
-  if not this._IsMaster then return end
-  
-  SkillUptime.Event.set("BAD_BLOOD_PROCCED")
-end
-
-SkillUptime.Hooks.onBeginRyukiExplosion = function(args)
-  local this = sdk.to_managed_object(args[2])
-  if not this._IsMaster then return end
-
-  SkillUptime.Event.set("WHITEFLAME_TORRENT_PROCCED")
-end
-
-SkillUptime.Hooks.onBeginSkillDischarge = function(args)
-  local this = sdk.to_managed_object(args[2])
-  if not this._IsMaster then return end
-
-  SkillUptime.Event.set("AZURE_BOLT_PROCCED")
-end
-
 ---@param cb fun(ctxHodlder: app.cEnemyContextHolder, args: any[]): number?, number?
 ---@return fun(arg: any[])
 SkillUptime.Hooks.BadConditionWithBossCtx = function(cb)
@@ -2010,236 +1694,111 @@ SkillUptime.Hooks.onBlastOnActivate =
     return SkillUptime.Const.BLAST_CUSTOM_SKILL_ID, 150
   end)
 
-
-SkillUptime.Hooks.onRequestDamageGUI = (function()
-  local Event = SkillUptime.Event
-  local Skills = SkillUptime.Skills
-  local pr = SkillUptime.Procs
-  local ex = SkillUptime.Procs.extraHits
-
-
-  local function procRegister(procType, skillID)
-    local prIdx = procType .. ":" .. skillID
-    if pr.types[prIdx] == nil then pr.types[prIdx] = procType end
-    if pr.names[prIdx] == nil then pr.names[prIdx] = Skills.resolve_name(skillID) end
-
-    return {
-      maxHit = function(damage)
-        if pr.maxHit[prIdx] == nil or damage > pr.maxHit[prIdx] then pr.maxHit[prIdx] = damage end
-      end,
-      incHits = function() pr.hits[prIdx] = (pr.hits[prIdx] or 0) + 1 end,
-      addDamage = function(damage) pr.damage[prIdx] = (pr.damage[prIdx] or 0) + damage end,
-      setDamage = function(damage) pr.damage[prIdx] = damage end,
-    }
-  end
-
-  local function ExtraHitRegister(eventMask)
-    local idx = eventMask
-    
-    return {
-      incHits = function() ex.hits[idx] = (ex.hits[idx] or 0) + 1 end,
-      addDamage = function(damage) ex.damage[idx] = (ex.damage[idx] or 0) + damage end,
-      recalculateAverage = function() ex.average[idx] = (ex.damage[idx] or 0) / (ex.hits[idx] or 1) end,
-      getRecalculatedTotals = function() 
-        local totals = {}
-        
-        -- get a mask representing which skills are influenced by this skill
-        local affectedSkillsMask = reduce({pairs(ex.hits)}, 0, function(affMask, mask)
-          return (mask & eventMask ~= 0) and (affMask | mask) or affMask
-        end)
-        
-        -- loop over all affected skills
-        for event in ivalues(Event.maskToEvents(affectedSkillsMask)) do
-          local skillMask = Event.toMask(event)
-          local skillID = Event.getMeta(event).skillID
-
-          -- loop over all extra hit damage procs, including combined ones
-          for procMask, damage in pairs(ex.damage) do
-
-            -- if the skill was part of the damage proc
-            if skillMask & procMask ~= 0 then
-              local bits = Event.maskToEventBits(procMask)
-              local combinedAvg = reduce({ivalues(bits)}, 0, function(sum, bit) return sum + ex.average[bit] end)
-
-              local mult = ex.average[skillMask] / combinedAvg
-              totals[skillID] = (totals[skillID] or 0) + (mult * damage)
-            end
-
-          end
-
-        end
-
-        return totals
-      end,
-    }
-  end
-
-  local function handleExtraHitProc(damage)
-    local activeEventsMask = Event.snapshot() & Event.toMask("EXTRAHIT_PROCS")
-    local activeEvents = Event.maskToEvents(activeEventsMask)
-    local multipleActive = activeEventsMask & (activeEventsMask - 1) ~= 0
-    local exRegister = ExtraHitRegister(activeEventsMask)
-    local pRegister = function(skillID) return procRegister("EXTRA", skillID) end
-    
-    -- update internal extra hit tracking
-    exRegister.incHits()
-    exRegister.addDamage(damage)
-  
-    if multipleActive then
-      -- increment hit count for every skill that contributed to the proc
-      for event in ivalues(activeEvents) do
-        local skillID = Event.getMeta(event).skillID
-        pRegister(skillID).incHits()
-      end
-    else 
-      -- update hit count and max damage, also update the average damage for this skill
-      local skillID = Event.getMeta(activeEvents[1]).skillID
-      exRegister.recalculateAverage()
-      pRegister(skillID).incHits()
-      pRegister(skillID).maxHit(damage)
-    end
-
-    -- recalculate damage of all affected skills
-    for skillID, damage in pairs(exRegister.getRecalculatedTotals()) do
-      pRegister(skillID).setDamage(damage)
-    end
-
-    Event.clear("EXTRAHIT_PROCS")
-  end
-
-  -- args:
-  -- 3: unk1 [via.vec3]
-  -- 4: damage [System.Single]
-  -- 5: state [app.GUI020020.State]
-  -- 6: unk2 [System.Boolean]
-  -- 7: targetAccessKey [System.Nullable`1<app.TARGET_ACCESS_KEY>]
-  -- 8: unk3 [System.Boolean]
-  -- 9: unk4 [System.Boolean]
-  -- 10: criticalState [app.GUI020020.CRITICAL_STATE]
-  -- 11: damageType [app.GUI020020.DAMAGE_TYPE]
-  -- 12: collabUIType [app.HitDef.COLLAB_DAMAGE_UI_TYPE]
-  return function(args)
-    local stateValToName = SkillUptime.Util.getEnumMap(TD_GUI_State)
-    local state = stateValToName[SkillUptime.Util.to_uint32(args[5])]
-    local isExtraHit = state == "EXTRAHIT"
-    
-    if not isExtraHit then return end
-    
-    local damage = sdk.to_float(args[4])
-    SkillUptime.Util.logDebug("damage: " .. math.floor(damage))
-    
-    handleExtraHitProc(damage)
-  end
-end)();
-
-(function()
-  local motionValue = 0
-
-  -- stockDamageDetail(app.HitInfo)
-  SkillUptime.Hooks.onStockDamageDetail = function(args)
+-- stockDamageDetail(app.HitInfo)
+SkillUptime.Hooks.onStockDamageDetail = function(args)
   local this = sdk.to_managed_object(args[2])
   if not this then return end
 
-    local hitInfo = sdk.to_managed_object(args[3])
-    local hitOwner = hitInfo:getActualAttackOwner()
+  local hitInfo = sdk.to_managed_object(args[3])
+  local hitOwner = hitInfo:getActualAttackOwner()
 
-     -- Get the master player's character GameObject
-    local pm = SkillUptime.Core.GetSingleton("app.PlayerManager")
-    local playerInfo = pm and pm:getMasterPlayer() or nil
-    local playerChar = playerInfo and playerInfo:get_Character() or nil
-    local playerGO = playerChar and playerChar:get_GameObject() or nil
+    -- Get the master player's character GameObject
+  local pm = SkillUptime.Core.GetSingleton("app.PlayerManager")
+  local playerInfo = pm and pm:getMasterPlayer() or nil
+  local playerChar = playerInfo and playerInfo:get_Character() or nil
+  local playerGO = playerChar and playerChar:get_GameObject() or nil
 
-    if hitOwner ~= (playerGO or playerChar) then return end
+  if hitOwner ~= (playerGO or playerChar) then return end
 
-    -- Get the attacks motion value and save it
-    local attackData = hitInfo:get_AttackData()
-    local motionValue = attackData and attackData._OriginalAttackAdjust or 0
+  -- Get the attacks motion value and save it
+  local attackData = hitInfo:get_AttackData()
+  local motionValue = attackData and attackData._OriginalAttackAdjust or 0
 
-    SkillUptime.Context.getMonsterContext(this).setLastHitMotionValue(motionValue)
+  SkillUptime.Context.getMonsterContext(this).setLastHitMotionValue(motionValue)
+end
+
+-- calcStockDamage(app.cEnemyStockDamage.cCalcDamage, app.cEnemyStockDamage.cPreCalcDamage, app.cEnemyStockDamage.cDamageRate, System.Boolean)
+SkillUptime.Hooks.onCalcStockDamage = function(args)
+  local this = sdk.to_managed_object(args[2])
+  if not this then return end
+
+  local preCalcDmg = sdk.to_managed_object(SkillUptime.Util.derefPtr(args[4]))
+  if not preCalcDmg then return end
+
+  local attacker = preCalcDmg.Common.Attacker
+  if attacker.Category ~= CATEGORY.PLAYER then return end
+
+  local hunterCharacter = AccessKeyUtil.getHunterCharacter(attacker)
+  if not hunterCharacter:get_IsMaster() then return end
+
+  local enemyCtx = this:get_Context():get_Em()
+  if not enemyCtx:get_IsBoss() then return end
+
+  local function meatToHzv(meat, actionType)
+    ---@type HitzoneValues
+    return {
+      fixed = 100,
+      raw = meat:getActionMeat(actionType),
+      slash = meat._Slash,
+      blow = meat._Blow,
+      shot = meat._Shot,
+      fire = meat._Fire,
+      water = meat._Water,
+      thunder = meat._Thunder,
+      ice = meat._Ice,
+      dragon = meat._Dragon,
+    }
   end
 
-  -- calcStockDamage(app.cEnemyStockDamage.cCalcDamage, app.cEnemyStockDamage.cPreCalcDamage, app.cEnemyStockDamage.cDamageRate, System.Boolean)
-  SkillUptime.Hooks.onCalcStockDamage = function(args)
-    local this = sdk.to_managed_object(args[2])
-    if not this then return end
+  -- get the hitzone values
+  local meatIndex = preCalcDmg.Common.MeatIndex._Value
+  local actionType = preCalcDmg.ActionType
+  local meatArray = enemyCtx.Parts._ParamParts._MeatArray._DataArray
+  local meat = meatArray[meatIndex]
 
-    local preCalcDmg = sdk.to_managed_object(SkillUptime.Util.derefPtr(args[4]))
-    if not preCalcDmg then return end
+  -- get the unwounded hitzone values
+  local partsArray = enemyCtx.Parts._ParamParts._PartsArray._DataArray
+  local partsIndex = preCalcDmg.Common.PartsIndex
+  local dmgParts = enemyCtx.Parts._DmgParts
+  local meatSlot = dmgParts[partsIndex]:get_MeatSlot()
+  local meatUnwoundedGuid = partsArray[partsIndex]:getPartsMeatGuid(meatSlot)
+  local meatUnwoundedIndex = enemyCtx.Parts._ParamParts:getMeatIndex(meatUnwoundedGuid)._Value
+  local unwoundedMeat = meatArray[meatUnwoundedIndex]
+  local unwoundedHzv = meatToHzv(unwoundedMeat, actionType)
 
-    local attacker = preCalcDmg.Common.Attacker
-    if attacker.Category ~= CATEGORY.PLAYER then return end
+  -- get if it's' a wound hit
+  local scarIndex = preCalcDmg.Common.ScarIndex
+  local scar = scarIndex ~= -1 and enemyCtx.Scar._ScarParts:Get(scarIndex) or nil
+  local isHitWound = scar and scar:get_State() == 2 or false
 
-    local hunterCharacter = AccessKeyUtil.getHunterCharacter(attacker)
-    if not hunterCharacter:get_IsMaster() then return end
+  -- get if WEX or Mind's Eye are active
+  local WEX_ID = SkillUptime.Const.WEX_SKILL_ID
+  local WEX_WOUND_ID = SkillUptime.Const.WEX_WOUND_CUSTOM_ID
+  local MINDS_EYE_ID = SkillUptime.Const.MINDS_EYE_SKILL_ID
+  local hunterSkill = hunterCharacter:get_HunterSkill()
+  local isWexActive = hunterSkill:checkSkillActive(WEX_ID)
+  local isMindsEyeActive = hunterSkill:checkSkillActive(MINDS_EYE_ID)
 
-    local enemyCtx = this:get_Context():get_Em()
-    if not enemyCtx:get_IsBoss() then return end
+  -- save and retreive values from monster context
+  local ctx = SkillUptime.Context.getMonsterContext(enemyCtx)
+  local motionValue = ctx.getLastHitMotionValue()
+  ctx.setLastHitzoneValues(meatToHzv(meat, actionType))
 
-    local function meatToHzv(meat, actionType)
-      ---@type HitzoneValues
-      return {
-        fixed = 100,
-        raw = meat:getActionMeat(actionType),
-        slash = meat._Slash,
-        blow = meat._Blow,
-        shot = meat._Shot,
-        fire = meat._Fire,
-        water = meat._Water,
-        thunder = meat._Thunder,
-        ice = meat._Ice,
-        dragon = meat._Dragon,
-      }
+  -- Handle Weakness Exploit and Mind's eye skill uptime.
+  if unwoundedHzv.raw >= 45 and isWexActive then
+    SkillUptime.Skills.hits_up[WEX_ID] = (SkillUptime.Skills.hits_up[WEX_ID] or 0) + 1
+    SkillUptime.Skills.mv_up[WEX_ID]   = (SkillUptime.Skills.mv_up[WEX_ID]   or 0) + motionValue
+
+    if isHitWound then
+      SkillUptime.Skills.hits_up[WEX_WOUND_ID] = (SkillUptime.Skills.hits_up[WEX_WOUND_ID] or 0) + 1
+      SkillUptime.Skills.mv_up[WEX_WOUND_ID]   = (SkillUptime.Skills.mv_up[WEX_WOUND_ID]   or 0) + motionValue
     end
-
-    -- get the hitzone values
-    local meatIndex = preCalcDmg.Common.MeatIndex._Value
-    local actionType = preCalcDmg.ActionType
-    local meatArray = enemyCtx.Parts._ParamParts._MeatArray._DataArray
-    local meat = meatArray[meatIndex]
-
-    -- get the unwounded hitzone values
-    local partsArray = enemyCtx.Parts._ParamParts._PartsArray._DataArray
-    local partsIndex = preCalcDmg.Common.PartsIndex
-    local dmgParts = enemyCtx.Parts._DmgParts
-    local meatSlot = dmgParts[partsIndex]:get_MeatSlot()
-    local meatUnwoundedGuid = partsArray[partsIndex]:getPartsMeatGuid(meatSlot)
-    local meatUnwoundedIndex = enemyCtx.Parts._ParamParts:getMeatIndex(meatUnwoundedGuid)._Value
-    local unwoundedMeat = meatArray[meatUnwoundedIndex]
-    local unwoundedHzv = meatToHzv(unwoundedMeat, actionType)
-
-    -- get if it's' a wound hit
-    local scarIndex = preCalcDmg.Common.ScarIndex
-    local scar = scarIndex ~= -1 and enemyCtx.Scar._ScarParts:Get(scarIndex) or nil
-    local isHitWound = scar and scar:get_State() == 2 or false
-
-    -- get if WEX or Mind's Eye are active
-    local WEX_ID = SkillUptime.Const.WEX_SKILL_ID
-    local WEX_WOUND_ID = SkillUptime.Const.WEX_WOUND_CUSTOM_ID
-    local MINDS_EYE_ID = SkillUptime.Const.MINDS_EYE_SKILL_ID
-    local hunterSkill = hunterCharacter:get_HunterSkill()
-    local isWexActive = hunterSkill:checkSkillActive(WEX_ID)
-    local isMindsEyeActive = hunterSkill:checkSkillActive(MINDS_EYE_ID)
-
-    -- save and retreive values from monster context
-    local ctx = SkillUptime.Context.getMonsterContext(enemyCtx)
-    local motionValue = ctx.getLastHitMotionValue()
-    ctx.setLastHitzoneValues(meatToHzv(meat, actionType))
-
-    -- Handle Weakness Exploit and Mind's eye skill uptime.
-    if unwoundedHzv.raw >= 45 and isWexActive then
-      SkillUptime.Skills.hits_up[WEX_ID] = (SkillUptime.Skills.hits_up[WEX_ID] or 0) + 1
-      SkillUptime.Skills.mv_up[WEX_ID]   = (SkillUptime.Skills.mv_up[WEX_ID]   or 0) + motionValue
-
-      if isHitWound then
-        SkillUptime.Skills.hits_up[WEX_WOUND_ID] = (SkillUptime.Skills.hits_up[WEX_WOUND_ID] or 0) + 1
-        SkillUptime.Skills.mv_up[WEX_WOUND_ID]   = (SkillUptime.Skills.mv_up[WEX_WOUND_ID]   or 0) + motionValue
-      end
-    elseif unwoundedHzv.raw < 45 and isMindsEyeActive then
-      SkillUptime.Skills.hits_up[MINDS_EYE_ID] = (SkillUptime.Skills.hits_up[MINDS_EYE_ID] or 0) + 1
-      SkillUptime.Skills.mv_up[MINDS_EYE_ID]   = (SkillUptime.Skills.mv_up[MINDS_EYE_ID]   or 0) + motionValue
-    end
+  elseif unwoundedHzv.raw < 45 and isMindsEyeActive then
+    SkillUptime.Skills.hits_up[MINDS_EYE_ID] = (SkillUptime.Skills.hits_up[MINDS_EYE_ID] or 0) + 1
+    SkillUptime.Skills.mv_up[MINDS_EYE_ID]   = (SkillUptime.Skills.mv_up[MINDS_EYE_ID]   or 0) + motionValue
   end
-end)()
+end
+
 
 SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Battle.active = false; SkillUptime.Battle.start = 0.0; SkillUptime.Battle.total = 0.0
@@ -2249,17 +1808,9 @@ SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
   SkillUptime.Procs.damage = {}; SkillUptime.Procs.hits = {}; SkillUptime.Procs.names = {}; SkillUptime.Procs.maxHit = {};
-  SkillUptime.Procs.extraHits.hits = {}; SkillUptime.Procs.extraHits.damage = {}
   SkillUptime.Damage.total = 0
   SkillUptime.Hits.total = 0
   SkillUptime.MV.total = 0
-
-  -- NOTE: Procs.extraHits.average does not get reset. The old values will serve as more accurate default values than the hardcoded ones.
-  --       The averages get recalculated by only relying on Procs.extraHits.hits and Procs.extraHits.damage, which do get reset, so this is fine.
-  --       By not reseting averages, we effectively use the last quests ending averages as default values.
-
-  -- reset events
-  SkillUptime.Event.clear("EXTRAHIT_PROCS", "STATUS_PROCS")
 
   -- reset monster contexts
   SkillUptime.Context.resetAll()
@@ -2303,9 +1854,13 @@ end
 
 -- Count boss-target hits and attribute them to currently active skills
 SkillUptime.Hooks.onHunterHitPost = function(args)
+  ---------------------------------------------------------------------------------------
+  -- Guard Clauses
+  ---------------------------------------------------------------------------------------
+
   local hitInfo = sdk.to_managed_object(args[3]); if not hitInfo then return end
 
-  -- Only count hits from the current player
+  -- 1. Only count hits from the current player -----------------------------------------
   local okOwner, hitOwner = pcall(function() return hitInfo:getActualAttackOwner() end)
   if not okOwner or not hitOwner then return end
 
@@ -2327,12 +1882,15 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
     if hitOwner ~= playerChar then return end
   end
 
+  -- 2. Only count hits that did damage -------------------------------------------------
   local damageData = hitInfo:get_DamageData(); if not damageData then return end
   if damageData:get_type_definition():get_name() ~= "cDamageParamEm" then return end
   local final = 0
   local fld = damageData:get_type_definition():get_field("FinalDamage")
   if fld then final = fld:get_data(damageData) or 0 end
   if (final or 0) <= 0 then return end
+
+  -- 3. Only count hits vs a boss -------------------------------------------------------
   local dmgOwner = hitInfo:get_DamageOwner(); if not dmgOwner or not TYPE_EnemyCharacter then return end
   local ok, enemy = pcall(function() return dmgOwner:getComponent(TYPE_EnemyCharacter) end)
   if not ok or not enemy or not enemy._Context or not enemy._Context._Em then return end
@@ -2341,21 +1899,26 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   local okB, vB = pcall(function() return ctx:get_IsBoss() end); if okB then isBoss = vB and true or false end
   if not isBoss then return end
 
-  -- Get hit Motion Value
-  local attackData = hitInfo:get_AttackData()
-  local motionValue = attackData and attackData._OriginalAttackAdjust or 0
+  ---------------------------------------------------------------------------------------
+  -- Valid Hit: start updating tracker data
+  ---------------------------------------------------------------------------------------
+  local monCtx = SkillUptime.Context.getMonsterContext(ctx)
+  local atkData = hitInfo:get_AttackData()
+  local motionValue = atkData and atkData._OriginalAttackAdjust or 0
 
-  -- Count this hit
+  -- Update tracker totals --------------------------------------------------------------
   SkillUptime.MV.total = (SkillUptime.MV.total or 0) + motionValue
   SkillUptime.Hits.total = (SkillUptime.Hits.total or 0) + 1
   SkillUptime.Damage.total = (SkillUptime.Damage.total or 0) + final
   SkillUptime.Util.logDebug(string.format("Player hit registered! Total hits: %d, Damage: %.0f", SkillUptime.Hits.total,
     final))
 
-  -- Per-move damage collection (only when strategy with moveDamage present is selected OR always accumulate
-  -- so that switching strategies later still shows historical data).
+  ---------------------------------------------------------------------------------------
+  -- Per-move damage collection
+  ---------------------------------------------------------------------------------------
   local mv = SkillUptime.Moves
   if mv then
+    -- 1. Build atkIndex ----------------------------------------------------------------
     local atkIndex = nil
     local okAtk, atkIdxVT = pcall(function() return hitInfo:get_AttackIndex() end)
     if okAtk and atkIdxVT then
@@ -2366,6 +1929,7 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
         atkIndex = (resId or 0) .. ":" .. idx
       end
     end
+
     if atkIndex then
       mv.damage[atkIndex] = (mv.damage[atkIndex] or 0) + final
       mv.hits[atkIndex] = (mv.hits[atkIndex] or 0) + 1
@@ -2373,22 +1937,14 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
       if (not mv.maxHit[atkIndex]) or final > mv.maxHit[atkIndex] then mv.maxHit[atkIndex] = final end
       -- Capture collision id & weapon type for later display (if not already)
       if mv.colIds[atkIndex] == nil then
-        local okAD, atkData = pcall(function() return hitInfo:get_AttackData() end)
-        if okAD and atkData and atkData._RuntimeData and atkData._RuntimeData._CollisionDataID then
+        if atkData and atkData._RuntimeData and atkData._RuntimeData._CollisionDataID then
           mv.colIds[atkIndex] = atkData._RuntimeData._CollisionDataID._Index
         end
       end
       if mv.wpTypes[atkIndex] == nil then
-        local pm = SkillUptime.Core.GetSingleton("app.PlayerManager")
-        if pm then
-          local okPlayer, playerInfo = pcall(function() return pm:getMasterPlayer() end)
-          if okPlayer and playerInfo then
-            local okChr, chr = pcall(function() return playerInfo:get_Character() end)
-            if okChr and chr and chr.get_WeaponType then
-              local okWT, wtype = pcall(function() return chr:get_WeaponType() end)
-              if okWT then mv.wpTypes[atkIndex] = wtype end
-            end
-          end
+        if playerChar.get_WeaponType then
+          local okWT, wtype = pcall(function() return playerChar:get_WeaponType() end)
+          if okWT then mv.wpTypes[atkIndex] = wtype end
         end
       end
       if mv.names[atkIndex] == nil then
@@ -2399,7 +1955,12 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
     end
   end
 
-  -- Attribute to active skills
+
+  ---------------------------------------------------------------------------------------
+  -- Attribute hit to uptime trackers
+  ---------------------------------------------------------------------------------------
+
+  -- 1. Attribute to active skills ------------------------------------------------------
   local counted = {}
   for sid, rec in pairs(SkillUptime.Status and SkillUptime.Status.SkillData or {}) do
     if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(sid)) then
@@ -2415,19 +1976,51 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
       counted[sid] = true
     end
   end
-  -- Attribute to active item buffs
+
+  -- 2. Attribute to active item buffs --------------------------------------------------
   for name, rec in pairs(SkillUptime.Items.data or {}) do
     if rec and rec.Activated then
       SkillUptime.Items.hits_up[name] = (SkillUptime.Items.hits_up[name] or 0) + 1
       SkillUptime.Items.mv_up[name]   = (SkillUptime.Items.mv_up[name]   or 0) + motionValue
     end
   end
-  -- Attribute to active status flags
+
+  -- 3. Attribute to active status flags ------------------------------------------------
   for fid, rec in pairs(SkillUptime.Flags.data or {}) do
     if rec and rec.Activated then
       SkillUptime.Flags.hits_up[fid] = (SkillUptime.Flags.hits_up[fid] or 0) + 1
       SkillUptime.Flags.mv_up[fid]   = (SkillUptime.Flags.mv_up[fid]   or 0) + motionValue
     end
+  end
+
+  ---------------------------------------------------------------------------------------
+  -- Attribute ExtraHit damage to their source skills                                   
+  ---------------------------------------------------------------------------------------
+  local extraHits = atkData._SkillAdditinalDamageArray._Array
+  local elemAttrMap = { "fire", "water", "thunder", "ice", "dragon" }
+  local UDRA_SID = SkillUptime.Const.NU_UDRAS_MUTINY_SKILL_ID
+  
+  -- 1. calculate final damage and aggregate by skill ID --------------------------------
+  local batchDmg = {}
+  for _, v in pairs(extraHits) do
+    local sid, dmg, attr = v._SkillType, v._Damage, v._Attr
+    if sid == 0 then break end
+
+    local dmgType  = (sid == UDRA_SID and "raw") or elemAttrMap[attr] or "fixed"
+    local finalDmg = monCtx.calculateDamage({ [dmgType] = dmg })
+    batchDmg[sid]  = (batchDmg[sid] or 0) + finalDmg
+  end
+
+  -- 2. Update tracker: Commit damage to the global procs table -------------------------
+  local pr  = SkillUptime.Procs
+  for skillID, damage in pairs(batchDmg) do
+    local idx = "EXTRA:" .. tostring(skillID)
+    
+    pr.types[idx]  = pr.types[idx] or "EXTRA"
+    pr.names[idx]  = pr.names[idx] or SkillUptime.Skills.resolve_name(skillID)
+    pr.maxHit[idx] = math.max(pr.maxHit[idx] or 0, damage)
+    pr.damage[idx] = (pr.damage[idx] or 0) + damage
+    pr.hits[idx]   = (pr.hits[idx] or 0) + 1
   end
 end
 
@@ -2925,7 +2518,7 @@ SkillUptime.UI.draw = function()
   if config.tables.procdamage then
     local pr = SkillUptime.Procs
     local totalDmg = SkillUptime.Damage.total or 0
-    local procCount = reduce({pairs(pr.damage)}, 0, function(sum) return sum + 1 end)
+    local procCount = 0; for _ in pairs(pr.damage) do procCount = procCount + 1 end
     imgui.text_colored("> Proc Damage (" .. tostring(procCount) .. ")", SkillUptime.Const.COLOR_BLUE)
 
     if procCount > 0 then
@@ -2969,10 +2562,10 @@ SkillUptime.UI.draw = function()
 
         -- Convert to array and sort by damage
         local rows = {}
-        for group in values(grouped) do table.insert(rows, group) end
+        for _, group in pairs(grouped) do table.insert(rows, group) end
         table.sort(rows, function(a, b) return a.dmg > b.dmg end)
 
-        for r in ivalues(rows) do
+        for _, r in ipairs(rows) do
           imgui.table_next_row()
 
           -- Proc type column
@@ -3182,17 +2775,6 @@ re.on_frame(function()
 end)
 
 -- ============================================================================
--- Event callback registration
--- ============================================================================
-
-SkillUptime.Event.on({ "EXTRAHIT_PROCS", "STATUS_PROCS" }, function(eventName, eventMeta)
-  local sid = eventMeta.skillID
-  local name = SkillUptime.Skills.resolve_name(sid)
-
-  SkillUptime.Util.logDebug(name .. " extra damage triggered")
-end)
-
--- ============================================================================
 -- Hook Registration
 -- ============================================================================
 SkillUptime.Core.registerHook(FN_QuestEnter, SkillUptime.Hooks.onQuestEnter, nil)
@@ -3206,11 +2788,6 @@ SkillUptime.Core.registerHook(FN_BeginResonanceNearCriticalUp, SkillUptime.Hooks
 SkillUptime.Core.registerHook(FN_BeginResonanceFarAttackUp, SkillUptime.Hooks.onResonanceFarAttackUp, nil)
 
 -- extra damage tracking hooks
-SkillUptime.Core.registerHook(FN_RequestDamageGUI, SkillUptime.Hooks.onRequestDamageGUI, nil)
-SkillUptime.Core.registerHook(FN_BeginScorchingHeat, SkillUptime.Hooks.onBeginScorchingHeat, nil)
-SkillUptime.Core.registerHook(FN_ApplayViolent, SkillUptime.Hooks.onApplayViolent, nil)
-SkillUptime.Core.registerHook(FN_BeginRyukiExplosion, SkillUptime.Hooks.onBeginRyukiExplosion, nil)
-SkillUptime.Core.registerHook(FN_BeginSkillDischarge, SkillUptime.Hooks.onBeginSkillDischarge, nil)
 SkillUptime.Core.registerHook(FN_SkillStabbingOnActivate, SkillUptime.Hooks.onSkillStabbingOnActivate, nil)
 SkillUptime.Core.registerHook(FN_SkillRyukiOnActivate, SkillUptime.Hooks.onSkillRyukiOnActivate, nil)
 SkillUptime.Core.registerHook(FN_BlastOnActivate, SkillUptime.Hooks.onBlastOnActivate, nil)
