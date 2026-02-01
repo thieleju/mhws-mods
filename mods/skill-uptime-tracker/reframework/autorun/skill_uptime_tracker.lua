@@ -2068,6 +2068,7 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
     pr.maxHit[idx] = math.max(pr.maxHit[idx] or 0, damage)
     pr.damage[idx] = (pr.damage[idx] or 0) + damage
     pr.hits[idx]   = (pr.hits[idx] or 0) + 1
+    pr.total = (pr.total or 0) + damage
   end
 end
 
@@ -2609,8 +2610,8 @@ SkillUptime.UI.draw = function()
         imgui.end_table()
       end
 
-      -- Total damage footer (don't show if proc damage table is visible)
-      if totalDmg > 0 and not config.tables.procdamage then
+      -- Total damage footer
+      if totalDmg > 0 then
         imgui.text(string.format("Total Damage: %.0f", totalDmg))
       end
     end
@@ -2620,6 +2621,7 @@ SkillUptime.UI.draw = function()
   if config.tables.procdamage then
     local pr = SkillUptime.Procs
     local totalDmg = SkillUptime.Damage.total or 0
+    local totalProcDamage = SkillUptime.Procs.total or 0
     local procCount = 0; for _ in pairs(pr.damage) do procCount = procCount + 1 end
     imgui.text_colored("> Proc Damage (" .. tostring(procCount) .. ")", SkillUptime.Const.COLOR_BLUE)
 
@@ -2697,9 +2699,9 @@ SkillUptime.UI.draw = function()
         imgui.end_table()
       end
 
-      -- Total damage footer
-      if totalDmg > 0 then
-        imgui.text(string.format("Total Damage: %.0f", totalDmg))
+      -- Total proc damage footer
+      if totalProcDamage > 0 then
+        imgui.text(string.format("Total Proc Damage: %.0f", totalProcDamage))
       end
     end
   end
