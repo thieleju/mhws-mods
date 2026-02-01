@@ -23,10 +23,10 @@
         "assets": [
           "CHANGELOG.md",
           "package.json",
-          "modinfo.ini",
-          "../../README.md"
+          "modinfo.ini"
         ],
-        "message": "chore(skill-uptime-tracker): release v${nextRelease.version} [skip ci]"
+        "message": "chore(skill-uptime-tracker): release v${nextRelease.version} [skip ci]",
+        "execCmd": "node ../../update-readme.js && git add ../../README.md"
       }
     ],
     [
