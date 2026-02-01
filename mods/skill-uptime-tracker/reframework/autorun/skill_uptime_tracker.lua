@@ -1686,6 +1686,7 @@ SkillUptime.Hooks.BadConditionWithBossCtx = function(cb)
     pr.maxHit[idx] = math.max(pr.maxHit[idx] or 0, damage)
     pr.damage[idx] = (pr.damage[idx] or 0) + damage
     pr.hits[idx]   = (pr.hits[idx] or 0) + 1
+    pr.total = (pr.total or 0) + damage
 
     SkillUptime.Damage.total = (SkillUptime.Damage.total or 0) + damage
   end
@@ -1846,7 +1847,7 @@ SkillUptime.Hooks.onQuestEnter = function()
   SkillUptime.Flags.uptime = {}; SkillUptime.Flags.timing_starts = {}; SkillUptime.Flags.data = {}; SkillUptime.Flags.hits_up = {}; SkillUptime.Flags.mv_up = {}; SkillUptime.Flags.mvxhzv_up = {}
   SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
   SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
-  SkillUptime.Procs.damage = {}; SkillUptime.Procs.hits = {}; SkillUptime.Procs.names = {}; SkillUptime.Procs.maxHit = {};
+  SkillUptime.Procs.damage = {}; SkillUptime.Procs.hits = {}; SkillUptime.Procs.names = {}; SkillUptime.Procs.maxHit = {}; SkillUptime.Procs.total = 0;
   SkillUptime.Damage.total = 0
   SkillUptime.Hits.total = 0
   SkillUptime.MV.total = 0
