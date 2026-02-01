@@ -21,3 +21,9 @@ Examples:
 - `chore(<module>): general maintenance or code cleanup`
 
 Replace `<module>` with the mod name you're working on (e.g., `better-hunter-highlights`, `skill-uptime-tracker`).
+
+## Contributors
+
+<a href="https://github.com/thieleju/mhws-mods/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=thieleju/mhws-mods" />
+</a>
