@@ -1,6 +1,6 @@
 {
   "name": "skill-uptime-tracker",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "scripts": {
     "build": "MOD_NAME=skill-uptime-tracker node ../../build.js"
   },
