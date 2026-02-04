@@ -13,7 +13,6 @@ local questDefType                            = sdk.find_type_definition("app.Qu
 local messageUtilType                         = sdk.find_type_definition("app.MessageUtil")
 local subMenuType                             = sdk.find_type_definition("app.cGUISubMenuInfo")
 local guiManagerType                          = sdk.find_type_definition("app.GUIManager")
-local playerManagerType                       = sdk.find_type_definition("app.PlayerManager")
 local questPlayingType                        = sdk.find_type_definition("app.cQuestPlaying")
 local guiInputCtrlFluentScrollListType        = sdk.find_type_definition(
   "ace.cGUIInputCtrl_FluentScrollList`2<app.GUIID.ID,app.GUIFunc.TYPE>")
@@ -25,11 +24,7 @@ local setSharedQuestAwardInfo                 = cQuestFlowParamType:get_method("
 local enterQuestReward                        = cQuestRewardType:get_method("enter()")
 local guiManagerRequestSubMenu                = guiManagerType:get_method("requestSubMenu")
 local guiInputCtrlFluentScrollListIndexChange = guiInputCtrlFluentScrollListType:get_method("getSelectedIndex")
-local evNetLeaveMember                        = playerManagerType:get_method(
-  "evNetLeaveMember(System.Int64, System.Int64)")
 local cQuestPlayingEnter                      = questPlayingType:get_method("enter()")
-local cQuestPlayingExit                       = questPlayingType:get_method("exit()")
--- local updateListItem = gui070003PartsList:get_method("updateListItem")
 
 -- utility methods
 local newGuid                                 = guidType:get_method("NewGuid")
@@ -45,23 +40,37 @@ local selectedHunterId                        = ""
 local memberAwardStats                        = {}
 local awardList                               = {}
 local showAwardWindow                         = false
-local playerIsOnQuest                         = false
-local config                                  = { enabled = true, debug = false, cache = {}, displayAwardIds = {} }
+local userIndexCache                          = {}
+local config                                  = { enabled = true, debug = false, writeToFile = false, cache = {}, displayAwardIds = {} }
 
 -- pink, red, yellow, green, gray
 local COLORS                                  = { 0x50e580f5, 0x500000ff, 0x5049cff5, 0x50a4ffa4, 0xCC666666 }
 local CONFIG_PATH                             = "better_hunter_highlights.json"
+local LOG_FILE_PATH                           = "better_hunter_highlights.log"
 local DAMAGE_AWARD_ID                         = 4
 local SUBMENU_CHAR_LIMIT                      = 35
 local MIN_TABLE_COLUMN_WIDTH                  = 130
+local AWARD_NUM_MAX                           = 29
+
 local AWARD_UNIT                              = { COUNT = 0, TIME = 1, NONE = 2 }
 local SESSION_TYPE                            = { LOBBY = 1, QUEST = 2, LINK = 3 }
-local AWARD_NUM_MAX                           = 29
+
+-- Write message to log file
+local function writeToLogFile(message)
+  if not config.writeToFile then return end
+  local file = io.open(LOG_FILE_PATH, "a")
+  if file then
+    file:write(os.date("[%Y-%m-%d %H:%M:%S] ") .. message .. "\n")
+    file:close()
+  end
+end
 
 -- Log debug message
 local function logDebug(message)
   if config.debug then
-    log.debug("[Better Hunter Highlights] " .. message)
+    local fullMessage = "[Better Hunter Highlights] " .. message
+    log.debug(fullMessage)
+    writeToLogFile(fullMessage)
   end
 end
 
@@ -78,7 +87,7 @@ end
 
 --- Save default config
 local function saveDefaultConfig()
-  config = { enabled = true, debug = false, cache = {}, displayAwardIds = {} }
+  config = { enabled = true, debug = false, writeToFile = false, cache = {}, displayAwardIds = {} }
   for _, award in ipairs(awardList) do
     config.displayAwardIds[tostring(award.awardId)] = true
   end
@@ -96,13 +105,18 @@ local function loadConfig()
     if type(loaded.debug) ~= "boolean" then
       loaded.debug = false
     end
+    if type(loaded.writeToFile) ~= "boolean" then
+      loaded.writeToFile = false
+    end
     if type(loaded.cache) ~= "table" then
       loaded.cache = {}
     end
     if type(loaded.displayAwardIds) ~= "table" then
       loaded.displayAwardIds = {}
-      for _, award in ipairs(awardList) do
-        loaded.displayAwardIds[tostring(award.awardId)] = true
+      if #awardList > 0 then
+        for _, award in ipairs(awardList) do
+          loaded.displayAwardIds[tostring(award.awardId)] = true
+        end
       end
     end
     -- migrate hideDamageNumbers to displayAwardIds
@@ -133,6 +147,16 @@ end
 --- @return number The rounded value
 local function roundToTwoDecimalPlaces(value)
   return math.floor(value * 100 + 0.5) / 100
+end
+
+--- Gets damage value from an entry's awards array
+--- @param entry table The member stats entry
+--- @return number The damage value
+local function getDamageFromEntry(entry)
+  if entry and entry.awards and entry.awards[DAMAGE_AWARD_ID + 1] then
+    return entry.awards[DAMAGE_AWARD_ID + 1].count or 0
+  end
+  return 0
 end
 
 --- Gets the localized name for an award ID
@@ -176,6 +200,7 @@ local function updateAwardList()
       unit = getAwardUnit(i) or AWARD_UNIT.NONE
     }
   end
+  logDebug(string.format("AwardList initialized with %d awards", #awardList))
 end
 
 -- Get user info for the current quest
@@ -183,28 +208,26 @@ local function getQuestUserInfo()
   local nm = sdk.get_managed_singleton("app.NetworkManager")
   if not nm then
     logError("NetworkManager singleton not found.")
-    return nil, "no_network_manager"
+    return nil, 0
   end
 
-  local uim = nm:get_UserInfoManager()
+  local uim = nm:call("get_UserInfoManager") or nm:get_field("<UserInfoManager>k__BackingField")
   if not uim then
     logError("UserInfoManager not found in NetworkManager.")
-    return nil, "no_user_info_manager"
+    return nil, 0
   end
 
-  local memberNum = uim:getMemberNum(SESSION_TYPE.QUEST)
-  if memberNum <= 0 then
-    logError("No members found in UserInfoList.")
-    return nil, "no_members"
+  local memberNum = safeCall(function() return uim:getMemberNum(SESSION_TYPE.QUEST) end) or 0
+  if memberNum > 0 then
+    local uil = safeCall(function() return uim:getUserInfoList(SESSION_TYPE.QUEST) end)
+    if uil and uil._ListInfo then
+      logDebug(string.format("Got QUEST session with %d members", memberNum))
+      return uil._ListInfo, memberNum
+    end
   end
 
-  local uil = uim:getUserInfoList(SESSION_TYPE.QUEST)
-  if not uil or not uil._ListInfo then
-    logError("UserInfoList or its _ListInfo is nil.")
-    return nil, "no_user_info_array"
-  end
-
-  return uil._ListInfo, memberNum
+  logDebug("No members found in QUEST session.")
+  return nil, 0
 end
 
 --- Handler for setSharedQuestAwardInfo hook
@@ -218,6 +241,7 @@ local function onSetSharedQuestAwardInfo(args)
   -- userIndex of the player who sent the sync packet
   local userIndex = safeCall(function()
     local idx = sdk.to_int64(args[3])
+    logDebug("Parsed userIndex from args: " .. tostring(idx))
     if idx < 0 or idx >= 4 then error("Invalid userIndex: " .. tostring(idx)) end
     return idx
   end)
@@ -225,6 +249,8 @@ local function onSetSharedQuestAwardInfo(args)
     logError("Invalid userIndex in syncQuestAwardInfo.")
     return sdk.PreHookResult.CALL_ORIGINAL
   end
+
+  logDebug("syncQuestAwardInfo sent by userIndex: " .. tostring(userIndex))
 
   -- the cQuestAwardSync packet itself
   local cQuestAwardSync = safeCall(function() return sdk.to_managed_object(args[4]) end)
@@ -237,22 +263,27 @@ local function onSetSharedQuestAwardInfo(args)
   local statsArray = {}
 
   -- award01 is special case, its type is System.UInt32[]
+  local award01Item = cQuestAwardSync["award01"]
+  local award01Array = {
+    award01Item:get_Item(0) or 0,
+    award01Item:get_Item(1) or 0,
+    award01Item:get_Item(2) or 0,
+    award01Item:get_Item(3) or 0
+  }
+  logDebug(string.format("award01Array values: [%d, %d, %d, %d]", award01Array[1], award01Array[2], award01Array[3],
+    award01Array[4]))
   table.insert(statsArray, {
     awardId = 0,
     count = 0,
-    award01Array = {
-      cQuestAwardSync["award01"]:get_Item(0) or 0,
-      cQuestAwardSync["award01"]:get_Item(1) or 0,
-      cQuestAwardSync["award01"]:get_Item(2) or 0,
-      cQuestAwardSync["award01"]:get_Item(3) or 0
-    }
+    award01Array = award01Array
   })
 
   -- loop through awardList and fill statsArray
   for i = 2, #awardList do
+    local awardValue = cQuestAwardSync[string.format("award%02d", i)] or 0
     table.insert(statsArray, {
       awardId = i - 1,
-      count = cQuestAwardSync[string.format("award%02d", i)] or 0,
+      count = awardValue,
     })
   end
 
@@ -262,13 +293,62 @@ local function onSetSharedQuestAwardInfo(args)
   local shortHunterId = nil
   local isSelf = false
 
-  if userInfoArray and userIndex < memberNum then
-    local user = userInfoArray[userIndex]
+  if userInfoArray and type(memberNum) == "number" then
+    logDebug(string.format("Attempting to get user info for userIndex=%d from array with %d members", userIndex,
+      memberNum))
+
+    -- Try to access the user at the given index
+    local user = nil
+    if userIndex < memberNum then
+      user = userInfoArray[userIndex]
+      logDebug(string.format("Accessed user at index %d", userIndex))
+    else
+      -- Index out of bounds - player likely disconnected
+      logDebug(string.format("WARNING: userIndex %d >= memberNum %d (player probably disconnected)",
+        userIndex, memberNum))
+      -- Try to get info from cache if available
+      if userIndexCache[userIndex] then
+        username = userIndexCache[userIndex].username
+        shortHunterId = userIndexCache[userIndex].shortHunterId
+        logDebug(string.format("Using cached info for userIndex %d: %s (ID: %s)", userIndex, tostring(username),
+          tostring(shortHunterId)))
+      else
+        logDebug(string.format("No cached info available for userIndex %d, saving stats without player identity",
+          userIndex))
+      end
+    end
+
     if user then
       username = safeCall(function() return user:get_PlName() end)
       shortHunterId = safeCall(function() return user:get_ShortHunterId() end)
       isSelf = safeCall(function() return user:get_IsSelf() end) or false
+
+      -- Cache the user info for later use
+      if username and shortHunterId then
+        userIndexCache[userIndex] = {
+          username = username,
+          shortHunterId = shortHunterId
+        }
+        logDebug(string.format("Cached player info for userIndex %d: %s (ID: %s)", userIndex, username, shortHunterId))
+      end
+
+      logDebug(string.format("Player info - Username: %s, HunterId: %s, IsSelf: %s", tostring(username),
+        tostring(shortHunterId), tostring(isSelf)))
+    elseif not username then
+      -- No user object and no cache - try to find by scanning all members
+      logDebug(string.format("Searching for userIndex %d in all available members...", userIndex))
+      for i = 0, memberNum - 1 do
+        local u = userInfoArray[i]
+        if u then
+          local name = safeCall(function() return u:get_PlName() end) or "?"
+          local hunterId = safeCall(function() return u:get_ShortHunterId() end) or "?"
+          logDebug(string.format("  [%d]: %s (ID: %s)", i, name, hunterId))
+        end
+      end
     end
+  else
+    logDebug(string.format("Could not get user info: userInfoArray=%s, memberNum=%s", tostring(userInfoArray ~= nil),
+      tostring(memberNum)))
   end
 
   memberAwardStats[userIndex + 1] = {
@@ -278,13 +358,14 @@ local function onSetSharedQuestAwardInfo(args)
     isSelf = isSelf,
     awards = statsArray
   }
+  logDebug(string.format("Stored memberAwardStats at index %d for user: %s", userIndex + 1, tostring(username)))
 
   if config.debug then
     local parts = {}
     for _, award in ipairs(statsArray) do
       table.insert(parts, string.format("(%d|%.0f)", award.awardId or 0, award.count or 0))
     end
-    logDebug(string.format("Player %d: Awards: %s", userIndex, table.concat(parts, ", ")))
+    logDebug(string.format("Player %d (%s): Awards: %s", userIndex, tostring(username), table.concat(parts, ", ")))
   end
 end
 
@@ -295,122 +376,83 @@ local function onEnterQuestReward(args)
     return sdk.PreHookResult.CALL_ORIGINAL
   end
 
-  logDebug("Quest reward enter() called")
+  logDebug(string.format("Current memberAwardStats count: %d", #memberAwardStats))
 
-  local userInfoArray, memberNum = getQuestUserInfo()
-  if not userInfoArray then
-    logError("Failed to get user info array in enterQuestReward.")
+  -- skip updating memberAwardStats if we have no stats or only one player
+  if #memberAwardStats <= 1 then
+    logDebug("Singleplayer or no stats detected, skipping memberAwardStats update.")
     return sdk.PreHookResult.CALL_ORIGINAL
   end
 
-  -- skip updating memberAwardStats if singleplayer
-  if memberNum <= 1 then
-    logDebug("Singleplayer detected, skipping memberAwardStats update.")
-    return sdk.PreHookResult.CALL_ORIGINAL
-  end
+  -- Build final member stats by collecting most recent stats per hunterId
+  -- Iterate backwards to keep the most recent stats for each player
+  local finalMemberStats = {}
+  local seenHunterIds = {}
 
-  logDebug(string.format("Processing %d quest members for award stats", memberNum))
-
-  -- Build a lookup map of current members by shortHunterId
-  local currentMembersMap = {}
-  for i = 0, memberNum - 1 do
-    local user = userInfoArray[i]
-    if user then
-      local shortHunterId = safeCall(function() return user:get_ShortHunterId() end)
-      local username = safeCall(function() return user:get_PlName() end)
-      if shortHunterId and username then
-        currentMembersMap[shortHunterId] = {
-          arrayIndex = i,
-          username = username,
-          shortHunterId = shortHunterId,
-          isSelf = safeCall(function() return user:get_IsSelf() end) or false
-        }
-        logDebug(string.format("Current member at quest-end index %d: %s (ID: %s)", i, username, shortHunterId))
-      end
-    end
-  end
-
-  -- Filter memberAwardStats to only include members who are still in the quest
-  -- Keep only the most recent entry (highest memberIndex) for each unique shortHunterId
-  local validMemberStats = {}
-  local seenHunterIds = {} -- Track which hunter IDs we've already added
-
-  -- Process entries in reverse order (highest memberIndex first) to get most recent stats
+  logDebug("Collecting most recent stats per player...")
   for i = #memberAwardStats, 1, -1 do
     local entry = memberAwardStats[i]
-    if entry and entry.shortHunterId and currentMembersMap[entry.shortHunterId] then
-      -- Check if we haven't already added an entry for this hunter ID
-      if not seenHunterIds[entry.shortHunterId] then
-        -- This member is still present at quest end
-        local currentMember = currentMembersMap[entry.shortHunterId]
-        entry.username = currentMember.username
-        entry.shortHunterId = currentMember.shortHunterId
-        entry.isSelf = currentMember.isSelf
-        -- Update the array index to match the quest-end position
-        entry.finalArrayIndex = currentMember.arrayIndex
-        table.insert(validMemberStats, 1, entry) -- Insert at beginning to maintain order
-        seenHunterIds[entry.shortHunterId] = true
-        logDebug(string.format("Keeping stats for %s (original memberIndex=%d, final arrayIndex=%d)",
-          entry.username, entry.memberIndex, entry.finalArrayIndex))
-      else
-        logDebug(string.format("Skipping duplicate entry for %s (memberIndex=%d, already have more recent stats)",
-          entry.username or "Unknown", entry.memberIndex))
-      end
-    else
-      local name = entry.username or (entry.memberIndex and string.format("Player %d", entry.memberIndex)) or "Unknown"
-      logDebug(string.format("Removing stats for %s (disconnected or not present)", name))
+    if entry and entry.shortHunterId and not seenHunterIds[entry.shortHunterId] then
+      seenHunterIds[entry.shortHunterId] = true
+      table.insert(finalMemberStats, entry)
+
+      local damage = getDamageFromEntry(entry)
+      logDebug(string.format("  Using stats from userIndex %d for %s (ID: %s, damage: %.0f)",
+        entry.memberIndex, entry.username or "?", entry.shortHunterId, damage))
     end
   end
 
-  -- Replace memberAwardStats with the filtered list
-  memberAwardStats = validMemberStats
+  memberAwardStats = finalMemberStats
+  logDebug(string.format("Final member count with stats: %d", #memberAwardStats))
 
   -- Calculate total damage for percentage calculation
   local totalDamage = 0
+  logDebug("Calculating total damage...")
   for _, data in ipairs(memberAwardStats) do
-    if data and data.awards and data.awards[DAMAGE_AWARD_ID + 1] then
-      totalDamage = totalDamage + (data.awards[DAMAGE_AWARD_ID + 1].count or 0)
-    end
+    local damageCount = getDamageFromEntry(data)
+    totalDamage = totalDamage + damageCount
+    logDebug(string.format("  %s: damage=%.0f", tostring(data.username), damageCount))
   end
+  logDebug(string.format("Total damage calculated: %.0f", totalDamage))
 
-  -- calculate award01 data for each member
+  -- Update damage stats and calculate award01 sum for each member
   local award01DataSum = { 0, 0, 0, 0 }
 
-  -- Update damage stats for each remaining member
-  for arrayIndex = 1, #memberAwardStats do
-    local entry = memberAwardStats[arrayIndex]
+  logDebug("Updating damage stats for all members...")
+  for _, entry in ipairs(memberAwardStats) do
     if entry then
-      local damageEntry = entry.awards[DAMAGE_AWARD_ID + 1] or { count = 0 }
-      local damageValue = damageEntry.count or 0
+      local damageValue = getDamageFromEntry(entry)
       local damagePercentage = totalDamage > 0 and (damageValue / totalDamage) * 100 or 0
 
       entry.damageTotal = roundToTwoDecimalPlaces(totalDamage)
       entry.damagePercentage = roundToTwoDecimalPlaces(damagePercentage)
       entry.damage = roundToTwoDecimalPlaces(damageValue)
 
+      logDebug(string.format("  %s: damage=%.0f, percentage=%.2f%%", tostring(entry.username), entry.damage,
+        entry.damagePercentage))
+
+      -- accumulate award01 data
       local arr = (entry.awards[1] and entry.awards[1].award01Array) or { 0, 0, 0, 0 }
       for j = 1, 4 do
         award01DataSum[j] = award01DataSum[j] + (arr[j] or 0)
       end
-
-      memberAwardStats[arrayIndex] = entry
     end
   end
 
   -- apply the total award01 data to each member
   for i, entry in ipairs(memberAwardStats) do
     entry.awards[1] = entry.awards[1] or { awardId = 0, award01Array = { 0, 0, 0, 0 } }
-    entry.awards[1].count = award01DataSum[i] or 0
+    local index = (entry.memberIndex and entry.memberIndex + 1) or 1
+    entry.awards[1].count = award01DataSum[index] or 0
   end
 
-  -- log final award01DataSum array
   logDebug(string.format("Final award01DataSum: [%d, %d, %d, %d]", award01DataSum[1], award01DataSum[2],
     award01DataSum[3], award01DataSum[4]))
 
   -- Cache the latest memberAwardStats
   config.cache = memberAwardStats
   saveConfig()
-  logDebug("Cached memberAwardStats in config")
+  logDebug(string.format("Cached %d memberAwardStats entries in config", #memberAwardStats))
 end
 
 --- Handler for when sub menus open
@@ -464,7 +506,6 @@ local function onRequestSubMenu(args)
 
   if not memberAward then
     logDebug("No member award found for selected hunter ID: " .. tostring(selectedHunterId))
-    -- add a message indicating no awards found
     addSubMenuItem:call(subMenu, "No highlights available", newGuid:call(nil), newGuid:call(nil), true, false,
       emptyAction)
     return sdk.PreHookResult.CALL_ORIGINAL
@@ -488,7 +529,6 @@ local function onRequestSubMenu(args)
 
     -- after TU2 sometimes the award names are missing
     if not award.name or award.name == "" then
-      -- print award object
       logDebug(" award ID object: " .. json.encode(award))
       logError(string.format("Award %d has no name, requesting name again", award.awardId))
 
@@ -500,51 +540,48 @@ local function onRequestSubMenu(args)
         award.awardId, awardList[i].name, awardList[i].explain, awardList[i].unit))
     end
 
-    -- check if award is enabled in config.displayAwardIds
-    if not config.displayAwardIds[tostring(award.awardId)] then
-      logDebug(string.format("Skipping award %s (%d) as it is not enabled in config", award.name, award.awardId))
-      goto continue
-    end
+    -- Skip if award is not enabled or has no count
+    if config.displayAwardIds[tostring(award.awardId)] and
+        memberAwardData and memberAwardData.count and memberAwardData.count > 0 then
+      local itemText = ""
 
-    -- skip if count is 0
-    if not memberAwardData or not memberAwardData.count or memberAwardData.count <= 0 then
-      goto continue
-    end
-
-    local itemText = ""
-
-    -- check if damage award
-    if award.awardId == DAMAGE_AWARD_ID then
-      -- format item text for damage award
-      itemText = string.format("Damage: %.0f (%.2f%%)", memberAward.damage, memberAward.damagePercentage)
-    else
-      -- every other award
-      local explainText = award.explain or ""
-      -- limit explain text to SUBMENU_CHAR_LIMIT characters
-      if #explainText > SUBMENU_CHAR_LIMIT then
-        explainText = string.format("%s...", explainText:sub(1, SUBMENU_CHAR_LIMIT))
-      end
-      -- check if time unit
-      if award.unit == AWARD_UNIT.TIME then
-        -- change it to format 00'00"00
-        local totalSeconds = memberAward.awards[i].count or 0
-        local minutes = math.floor(totalSeconds / 60)
-        local seconds = math.floor(totalSeconds % 60)
-        local hundredths = math.floor((totalSeconds - math.floor(totalSeconds)) * 100)
-
-        itemText = string.format("%s: %02d'%02d\"%02d", explainText, minutes, seconds, hundredths)
+      -- check if damage award
+      if award.awardId == DAMAGE_AWARD_ID then
+        -- format item text for damage award
+        local damage = memberAward.damage or 0
+        local damagePercentage = memberAward.damagePercentage or 0
+        itemText = string.format("Damage: %.0f (%.2f%%)", damage, damagePercentage)
       else
-        -- default to count unit
-        itemText = string.format("%s: %.0f", explainText, memberAward.awards[i].count or 0)
+        -- every other award
+        local explainText = award.explain or ""
+        -- limit explain text to SUBMENU_CHAR_LIMIT characters
+        if #explainText > SUBMENU_CHAR_LIMIT then
+          explainText = string.format("%s...", explainText:sub(1, SUBMENU_CHAR_LIMIT))
+        end
+        -- check if time unit
+        if award.unit == AWARD_UNIT.TIME then
+          -- change it to format 00'00"00
+          local totalSeconds = memberAward.awards[i].count or 0
+          local minutes = math.floor(totalSeconds / 60)
+          local seconds = math.floor(totalSeconds % 60)
+          local hundredths = math.floor((totalSeconds - math.floor(totalSeconds)) * 100)
+
+          itemText = string.format("%s: %02d'%02d\"%02d", explainText, minutes, seconds, hundredths)
+        else
+          -- default to count unit
+          itemText = string.format("%s: %.0f", explainText, memberAward.awards[i].count or 0)
+        end
+      end
+
+      -- add item to sub menu with the award name and explain text
+      addSubMenuItem:call(subMenu, itemText, guid, guid, true, false, emptyAction)
+      submenuItemCount = submenuItemCount + 1
+      logDebug(string.format("Added sub menu item: %s (ID: %d)", itemText, award.awardId))
+    else
+      if not config.displayAwardIds[tostring(award.awardId)] then
+        logDebug(string.format("Skipping award %s (%d) as it is not enabled in config", award.name, award.awardId))
       end
     end
-
-    -- add item to sub menu with the award name and explain text
-    addSubMenuItem:call(subMenu, itemText, guid, guid, true, false, emptyAction)
-    submenuItemCount = submenuItemCount + 1
-    logDebug(string.format("Added sub menu item: %s (ID: %d)", itemText, award.awardId))
-
-    ::continue::
   end
 
   -- if no items were added, add a message indicating no valid awards
@@ -573,6 +610,7 @@ local function onIndexChange(args)
   -- get SelectedItem field
   local selectedItem = guiInputCtrlFluentScrollList:call("getSelectedItem")
   if not selectedItem then
+    logDebug("selectedItem is nil in onIndexChange, skipping")
     return sdk.PreHookResult.CALL_ORIGINAL
   end
 
@@ -602,64 +640,24 @@ local function onIndexChange(args)
   local hunterId = textChild:call("get_Message")
   logDebug("Selected Hunter ID: " .. tostring(hunterId))
   selectedHunterId = hunterId
-end
-
---- Handler for when a quest member leaves, remove their stats
----@param args any
-local function onQuestMemberLeave(args)
-  if not config.enabled then
-    return sdk.PreHookResult.CALL_ORIGINAL
-  end
-
-  -- skip if not on quest
-  if not playerIsOnQuest then
-    logDebug("evNetLeaveMember called while not on quest, skipping")
-    return sdk.PreHookResult.CALL_ORIGINAL
-  end
-
-  local sessionType = sdk.to_int64(args[3])
-  local memberIndex = sdk.to_int64(args[4])
-
-  -- only continue if sessionType is QUEST
-  if sessionType ~= SESSION_TYPE.QUEST then
-    return sdk.PreHookResult.CALL_ORIGINAL
-  end
-
-  -- check if memberIndex is nil
-  if memberIndex == nil then
-    logError("evNetLeaveMember called with nil memberIndex")
-    return sdk.PreHookResult.CALL_ORIGINAL
-  end
-
-  logDebug(string.format(
-    "PlayerManager: evNetLeaveMember called with SESSION_TYPE %d, memberIndex %d",
-    sessionType, memberIndex))
-
-  logDebug(string.format("Member %d left, but keeping their stats for potential rejoin", memberIndex))
-
-  -- Cache the current memberAwardStats
-  config.cache = memberAwardStats
-  saveConfig()
+  logDebug("Updated selectedHunterId to: " .. tostring(selectedHunterId))
 end
 
 --- Handler for entering quest playing state
 local function onQuestPlayingEnter()
-  logDebug("cQuestPlaying enter() called")
-  playerIsOnQuest = true
-end
-
--- Handler for exiting quest playing state
-local function onQuestPlayingExit()
-  logDebug("cQuestPlaying exit() called")
-  playerIsOnQuest = false
+  userIndexCache = {}
+  logDebug("Cleared userIndexCache")
 end
 
 -- Helper function to register hooks
 local function registerHook(method, pre, post)
-  if not method then return end
+  if not method then
+    logError("Cannot register hook, method is nil")
+    return false
+  end
   sdk.hook(method, pre, post)
-
-  logDebug("Hook registered for method: " .. tostring(method:get_name()))
+  logDebug(string.format("Hook registered for method: %s", tostring(method:get_name())))
+  return true
 end
 
 --- Draw the award table in a separate window
@@ -850,6 +848,14 @@ re.on_draw_ui(function()
         logDebug("Config set debug mode to " .. tostring(config.debug))
       end
 
+      -- write to file
+      if imgui.checkbox("Write logs to file", config.writeToFile) then
+        config.writeToFile = not config.writeToFile
+        logDebug("Config set writeToFile to " .. tostring(config.writeToFile))
+      end
+
+      -- clear cached stats
+
       -- clear cached stats
       local clearClicked = imgui.button("Clear cached highlights data")
       imgui.same_line()
@@ -884,7 +890,6 @@ re.on_draw_ui(function()
 end)
 
 -- Load configuration and add config save listener
-
 loadConfig()
 
 re.on_config_save(function()
@@ -906,16 +911,8 @@ registerHook(guiManagerRequestSubMenu, onRequestSubMenu, nil)
 -- Called when a fluent scroll list index changes, used to update the selected index in the hunter highlights menu
 registerHook(guiInputCtrlFluentScrollListIndexChange, onIndexChange, nil)
 
--- Called when a quest member leaves, removes their stats from memberAwardStats
-registerHook(evNetLeaveMember, onQuestMemberLeave, nil)
-
--- Called when entering quest playing state, sets playerIsOnQuest to true
+-- Called when entering quest playing state
 registerHook(cQuestPlayingEnter, onQuestPlayingEnter, nil)
-
--- Called when exiting quest playing state, sets playerIsOnQuest to false
-registerHook(cQuestPlayingExit, onQuestPlayingExit, nil)
 
 -- Update the award list with localized names and explanations
 updateAwardList()
-
-logDebug("Better Hunter Highlights initialized successfully!")
