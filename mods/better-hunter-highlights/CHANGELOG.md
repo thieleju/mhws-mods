@@ -1,3 +1,11 @@
+# [better-hunter-highlights-v1.6.3](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.6.2...better-hunter-highlights-v1.6.3) (2026-02-04)
+
+
+### Bug Fixes
+
+* **better-hunter-highlights:** improve handling of users changing during quest and tu4 fix ([018cbbc](https://github.com/thieleju/mhws-mods/commit/018cbbc4efabb902726dca691d790a9ca04e052c))
+* **release:** update README links and include README in release assets ([0664bd0](https://github.com/thieleju/mhws-mods/commit/0664bd0cff8eb4ec945390c50a2d7070a9cedbf9))
+
 # [better-hunter-highlights-v1.6.2](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.6.1...better-hunter-highlights-v1.6.2) (2025-12-04)
 
 
