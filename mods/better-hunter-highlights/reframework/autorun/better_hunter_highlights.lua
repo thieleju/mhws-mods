@@ -640,13 +640,13 @@ local function onIndexChange(args)
   local hunterId = textChild:call("get_Message")
   logDebug("Selected Hunter ID: " .. tostring(hunterId))
   selectedHunterId = hunterId
-  logDebug("Updated selectedHunterId to: " .. tostring(selectedHunterId))
 end
 
 --- Handler for entering quest playing state
 local function onQuestPlayingEnter()
+  memberAwardStats = {}
   userIndexCache = {}
-  logDebug("Cleared userIndexCache")
+  logDebug("Cleared memberAwardStats and userIndexCache")
 end
 
 -- Helper function to register hooks
