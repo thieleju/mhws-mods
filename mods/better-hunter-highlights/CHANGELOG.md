@@ -1,3 +1,10 @@
+# [better-hunter-highlights-v1.6.4](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.6.3...better-hunter-highlights-v1.6.4) (2026-02-07)
+
+
+### Bug Fixes
+
+* **better-hunter-highlights:** add cache clear on new quest start ([332e1f0](https://github.com/thieleju/mhws-mods/commit/332e1f0004b2abe49b3e653d9e7d9e1c46dd2e6a))
+
 # [better-hunter-highlights-v1.6.3](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.6.2...better-hunter-highlights-v1.6.3) (2026-02-04)
 
 
