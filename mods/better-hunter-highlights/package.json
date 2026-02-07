@@ -1,6 +1,6 @@
 {
   "name": "better-hunter-highlights",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "scripts": {
     "build": "MOD_NAME=better-hunter-highlights node ../../build.js"
   },
