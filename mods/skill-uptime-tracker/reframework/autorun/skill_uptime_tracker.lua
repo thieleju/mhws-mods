@@ -60,18 +60,20 @@ local FN_GetSkillLevel2               = TD_cHunterSkill:get_method(
 local FN_GetItemNameRaw               = TD_ItemDef and TD_ItemDef:get_method("RawName(app.ItemDef.ID)") or nil
 
 -- Resonance tracking methods
-local FN_BeginResonanceNear           = TD_SkillParamInfo:get_method("beginResonanceNear") or nil
-local FN_BeginResonanceFar            = TD_SkillParamInfo:get_method("beginResonanceFar") or nil
 local FN_BeginResonanceNearCriticalUp = TD_SkillParamInfo:get_method("beginResonanceNearCriticalUp") or nil
 local FN_BeginResonanceFarAttackUp    = TD_SkillParamInfo:get_method("beginResonanceFarAttackUp") or nil
 
 -- Status tracking methods
-local FN_SkillStabbingOnActivate      = TD_ConditionSkillStabbing:get_method("onActivate") or nil -- flayer tracking method
-local FN_SkillRyukiOnActivate         = TD_ConditionSkillRyuki:get_method("onActivate") or nil -- Convert Element tracking method
-local FN_BlastOnActivate              = TD_ConditionBlast:get_method("onActivate") or nil -- Blast explosion tracking method
+local FN_SkillStabbingOnActivate      = TD_ConditionSkillStabbing:get_method("onActivate") or
+    nil -- flayer tracking method
+local FN_SkillRyukiOnActivate         = TD_ConditionSkillRyuki:get_method("onActivate") or
+    nil -- Convert Element tracking method
+local FN_BlastOnActivate              = TD_ConditionBlast:get_method("onActivate") or
+    nil -- Blast explosion tracking method
 
 -- Damage calculation methods
-local FN_CalcStockDamage              = TD_cEnemyStockDamage:get_method("calcStockDamage(app.cEnemyStockDamage.cCalcDamage, app.cEnemyStockDamage.cPreCalcDamage, app.cEnemyStockDamage.cDamageRate, System.Boolean)")
+local FN_CalcStockDamage              = TD_cEnemyStockDamage:get_method(
+  "calcStockDamage(app.cEnemyStockDamage.cCalcDamage, app.cEnemyStockDamage.cPreCalcDamage, app.cEnemyStockDamage.cDamageRate, System.Boolean)")
 local FN_StockDamageDetail            = TD_cEnemyStockDamage:get_method("stockDamageDetail(app.HitInfo)")
 
 -- ============================================================================
@@ -106,10 +108,10 @@ local config                          = {
 }
 
 -- Module namespace
-local SkillUptime = {
-  UI = {},
+local SkillUptime                     = {
+  UI          = {},
   defaultFont = nil,
-  Strategy = {
+  Strategy    = {
     defs = {
       { label = "In combat",                mode = "IN_COMBAT",     showBattleHeader = true,  accumulateTime = true },
       { label = "Hits (up/total)",          mode = "HITS",          showBattleHeader = false, accumulateTime = false },
@@ -118,8 +120,8 @@ local SkillUptime = {
     },
     labels = {},
   },
-  Battle   = { active = false, start = 0.0, total = 0.0 },
-  Skills   = {
+  Battle      = { active = false, start = 0.0, total = 0.0 },
+  Skills      = {
     running = {},
     timing_starts = {},
     uptime = {},
@@ -166,8 +168,8 @@ local SkillUptime = {
       "_ResonanceInfo",           -- Resonance
     }
   },
-  Status   = { SkillData = {} },
-  Items    = {
+  Status      = { SkillData = {} },
+  Items       = {
     data = {},
     timing_starts = {},
     uptime = {},
@@ -195,7 +197,7 @@ local SkillUptime = {
     },
   },
   -- Per-move damage tracker (player only, boss hits)
-  Moves    = {
+  Moves       = {
     damage = {},
     hits = {},
     names = {},
@@ -229,28 +231,28 @@ local SkillUptime = {
     },
     maxHit = {}, -- moveKey -> highest single hit damage
   },
-  Procs = {
+  Procs       = {
     damage = {},
     hits = {},
     names = {},
     maxHit = {},
     types = {},
   },
-  Flags    = { 
-    names = {}, 
-    data = {}, 
-    timing_starts = {}, 
-    uptime = {}, 
-    hits_up = {}, 
-    mv_up = {}, 
-    mvxhzv_up = {}, 
+  Flags       = {
+    names = {},
+    data = {},
+    timing_starts = {},
+    uptime = {},
+    hits_up = {},
+    mv_up = {},
+    mvxhzv_up = {},
     lastTick = nil,
   },
-  Hits     = { total = 0 },
-  Damage   = { total = 0 },
-  MV       = { total = 0},
-  MVxHZV   = { total = 0},
-  Const    = {
+  Hits        = { total = 0 },
+  Damage      = { total = 0 },
+  MV          = { total = 0 },
+  MVxHZV      = { total = 0 },
+  Const       = {
     COLOR_RED = 0xFF0000FF,
     COLOR_GREEN = 0xFF00FF00,
     COLOR_BLUE = 0xFFFFA500,
@@ -272,11 +274,11 @@ local SkillUptime = {
     EPSILON = 0.0005,
   },
   -- Ensure sub-namespaces exist before assigning functions
-  Util     = {},
-  Config   = {},
-  Core     = {},
-  Hooks    = {},
-  Context  = {},
+  Util        = {},
+  Config      = {},
+  Core        = {},
+  Hooks       = {},
+  Context     = {},
 }
 
 -- ============================================================================
@@ -289,10 +291,10 @@ SkillUptime.Strategy.get_active = function()
 end
 
 -- Singleton cache
-local _SINGLETON_CACHE = {}
+local _SINGLETON_CACHE          = {}
 
 -- Status flags mapping
-local FLAGS_NAME_MAP   = {
+local FLAGS_NAME_MAP            = {
   [0] = "No Damage",
   [1] = "Friendly Fire Disabled",
   [2] = "Guard",
@@ -529,7 +531,7 @@ SkillUptime.Context = (function()
 
     ---@alias DamageType "fixed" | "raw" | "slash" | "blow" | "shot" | "fire" | "water" | "thunder" | "ice" | "dragon"
     ---@alias DamageValues table<DamageType, number>
-    
+
     ---@type HitzoneValues
     local DEFAULT_HITZONE_VALUES = {
       fixed   = 100, -- 100 so that fixed damage isn't multiplied
@@ -545,7 +547,7 @@ SkillUptime.Context = (function()
     }
 
     ---@param tbl table
-    local function shallowCopyTable(tbl) 
+    local function shallowCopyTable(tbl)
       local copy = {}
       for k, v in pairs(tbl) do copy[k] = v end
       return copy
@@ -573,7 +575,7 @@ SkillUptime.Context = (function()
       ---@return UniqueIndex
       getId = function()
         return Id
-      end;
+      end,
 
 
       --- Updates the hitzone values of the most recent hit
@@ -586,14 +588,14 @@ SkillUptime.Context = (function()
             lastHitzoneValues[k] = v
           end
         end
-      end;
+      end,
 
 
       --- Returns a copy of the last hitzone values
       ---@return HitzoneValues
       getLastHitzoneValues = function()
         return shallowCopyTable(lastHitzoneValues)
-      end;
+      end,
 
 
       --- Converts an attack profile into damage using last HZVs
@@ -608,35 +610,35 @@ SkillUptime.Context = (function()
           total = total + (val * hzv / 100)
         end
         return total
-      end;
+      end,
 
 
       --- Updates the recorded motion value of the most recent hit against a monster
       ---@param mv number
       setLastHitMotionValue = function(mv)
         if mv then lastHitMotionValue = mv end
-      end;
+      end,
 
 
       --- Get the motion value that was most recently saved
       ---@return number
       getLastHitMotionValue = function()
         return lastHitMotionValue
-      end;
+      end,
 
 
       --- Updates the recorded MV x HZV of the most recent hit against a monster
       ---@param mvxhzv number
       setLastHitMVxHZV = function(mvxhzv)
         if mvxhzv then lastHitMVxHZV = mvxhzv end
-      end;
+      end,
 
 
       --- Get the MV x HZV that was most recently saved
       ---@return number
       getLastHitMVxHZV = function()
         return lastHitMVxHZV
-      end;
+      end,
 
     }
   end
@@ -688,22 +690,23 @@ SkillUptime.Context = (function()
     getMonsterContext = function(uniqueIndexResolvable)
       local uid = assert(
         resolveUniqueIndex(uniqueIndexResolvable),
-        SkillUptime.Const.PREFIX .. "Attempted to get monster context with an unresolvable UniqueIndex: " .. tostring(uniqueIndexResolvable)
+        SkillUptime.Const.PREFIX ..
+        "Attempted to get monster context with an unresolvable UniqueIndex: " .. tostring(uniqueIndexResolvable)
       )
-      
+
       local ctx = monsterContexts[uid]
       if not ctx then
         ctx = createMonsterCombatContext(uid)
         monsterContexts[uid] = ctx
       end
-  
+
       return ctx
-    end;
-  
-  
+    end,
+
+
     resetAll = function()
       monsterContexts = {}
-    end;
+    end,
 
   }
 end)()
@@ -897,9 +900,9 @@ SkillUptime.Config.load = function()
   if not (json and json.load_file) then return end
   local loaded = json.load_file(SkillUptime.Const.CONFIG_PATH)
   if not loaded then return end
-  
+
   local function get_value(...)
-    for _, path in ipairs({...}) do
+    for _, path in ipairs({ ... }) do
       local value = loaded
       for _, key in ipairs(path) do
         if type(value) ~= "table" then break end
@@ -911,11 +914,11 @@ SkillUptime.Config.load = function()
   end
 
   -- ensure backwards compatibility with old config keys
-  
-  local open = get_value({"open"}, {"openWindow"})
+
+  local open = get_value({ "open" }, { "openWindow" })
   if type(open) == "boolean" then config.open = open end
-  
-  local tables = get_value({"tables"}, {"show"})
+
+  local tables = get_value({ "tables" }, { "show" })
   if type(tables) == "table" then
     config.tables.skills = (tables.skills ~= false)
     config.tables.items = (tables.items == true)
@@ -923,18 +926,18 @@ SkillUptime.Config.load = function()
     config.tables.movedamage = (tables.movedamage ~= false)
     config.tables.procdamage = (tables.procdamage ~= false)
   end
-  
-  local columns = get_value({"columns"})
+
+  local columns = get_value({ "columns" })
   if type(columns) == "table" then
     config.columns.primary = (columns.primary ~= false)
     config.columns.percent = (columns.percent ~= false)
     config.columns.active = (columns.active ~= false)
     config.columns.state = (columns.state ~= false)
   end
-  
-  local strategyIndex = get_value({"strategy", "index"}, {"strategyIndex"})
+
+  local strategyIndex = get_value({ "strategy", "index" }, { "strategyIndex" })
   if type(strategyIndex) == "number" then config.strategy.index = strategyIndex end
-  
+
   if type(loaded.debug) == "boolean" then config.debug = loaded.debug end
   if type(loaded.hideButtons) == "boolean" then config.hideButtons = loaded.hideButtons end
   if type(loaded.autoClose) == "boolean" then config.autoClose = loaded.autoClose end
@@ -1082,9 +1085,9 @@ end
 SkillUptime.Util.newValueType = function(initVal, typeName)
   -- support both overloads
   if typeName == nil then typeName, initVal = initVal, nil end
-  
+
   local val = ValueType.new(sdk.find_type_definition(typeName))
-  if initVal ~= nil then val.m_value = initVal end                    
+  if initVal ~= nil then val.m_value = initVal end
   return val
 end
 
@@ -1460,7 +1463,7 @@ SkillUptime.Skills.update_active_skills = function()
       SkillUptime.Skills.update_boolean(skl, SkillUptime.Const.BURST_LV2_CUSTOM_ID, false)
     end
   end
-  
+
   return skl, infos, status
 end
 
@@ -1679,15 +1682,15 @@ SkillUptime.Hooks.BadConditionWithBossCtx = function(cb)
     if not skillID or not damage then return end
 
     -- register damage received from callback
-    local pr  = SkillUptime.Procs
-    local idx = "STATUS:" .. tostring(skillID)
+    local pr                 = SkillUptime.Procs
+    local idx                = "STATUS:" .. tostring(skillID)
 
-    pr.types[idx]  = pr.types[idx] or "STATUS"
-    pr.names[idx]  = pr.names[idx] or SkillUptime.Skills.resolve_name(skillID)
-    pr.maxHit[idx] = math.max(pr.maxHit[idx] or 0, damage)
-    pr.damage[idx] = (pr.damage[idx] or 0) + damage
-    pr.hits[idx]   = (pr.hits[idx] or 0) + 1
-    pr.total = (pr.total or 0) + damage
+    pr.types[idx]            = pr.types[idx] or "STATUS"
+    pr.names[idx]            = pr.names[idx] or SkillUptime.Skills.resolve_name(skillID)
+    pr.maxHit[idx]           = math.max(pr.maxHit[idx] or 0, damage)
+    pr.damage[idx]           = (pr.damage[idx] or 0) + damage
+    pr.hits[idx]             = (pr.hits[idx] or 0) + 1
+    pr.total                 = (pr.total or 0) + damage
 
     SkillUptime.Damage.total = (SkillUptime.Damage.total or 0) + damage
   end
@@ -1704,28 +1707,28 @@ SkillUptime.Hooks.BadConditionWithBossCtxAndHunSkill = function(cb)
 end
 
 SkillUptime.Hooks.onSkillStabbingOnActivate =
-  SkillUptime.Hooks.BadConditionWithBossCtxAndHunSkill(function(ctxHolder, cHunterSkill)
-    local damage = cHunterSkill:getSkillStabbingAddDamage(ctxHolder)
-    return SkillUptime.Const.FLAYER_SKILL_ID, damage
-  end)
+    SkillUptime.Hooks.BadConditionWithBossCtxAndHunSkill(function(ctxHolder, cHunterSkill)
+      local damage = cHunterSkill:getSkillStabbingAddDamage(ctxHolder)
+      return SkillUptime.Const.FLAYER_SKILL_ID, damage
+    end)
 
 SkillUptime.Hooks.onSkillRyukiOnActivate =
-  SkillUptime.Hooks.BadConditionWithBossCtxAndHunSkill(function(ctxHolder, cHunterSkill)
-    local fixed  = SkillUptime.Util.newValueType(0, "System.Single")
-    local dragon = SkillUptime.Util.newValueType(0, "System.Single")
-    cHunterSkill:getSkillRyukiAddDamage(ctxHolder, fixed:address(), dragon:address())
+    SkillUptime.Hooks.BadConditionWithBossCtxAndHunSkill(function(ctxHolder, cHunterSkill)
+      local fixed  = SkillUptime.Util.newValueType(0, "System.Single")
+      local dragon = SkillUptime.Util.newValueType(0, "System.Single")
+      cHunterSkill:getSkillRyukiAddDamage(ctxHolder, fixed:address(), dragon:address())
 
-    local damage = SkillUptime.Context.getMonsterContext(ctxHolder).calculateDamage({
-      fixed = fixed.m_value,
-      dragon = dragon.m_value
-    })
-    return SkillUptime.Const.CONVERT_ELEMENT_SKILL_ID, damage
-  end)
+      local damage = SkillUptime.Context.getMonsterContext(ctxHolder).calculateDamage({
+        fixed = fixed.m_value,
+        dragon = dragon.m_value
+      })
+      return SkillUptime.Const.CONVERT_ELEMENT_SKILL_ID, damage
+    end)
 
 SkillUptime.Hooks.onBlastOnActivate =
-  SkillUptime.Hooks.BadConditionWithBossCtx(function()
-    return SkillUptime.Const.BLAST_CUSTOM_SKILL_ID, 150
-  end)
+    SkillUptime.Hooks.BadConditionWithBossCtx(function()
+      return SkillUptime.Const.BLAST_CUSTOM_SKILL_ID, 150
+    end)
 
 -- stockDamageDetail(app.HitInfo)
 SkillUptime.Hooks.onStockDamageDetail = function(args)
@@ -1735,7 +1738,7 @@ SkillUptime.Hooks.onStockDamageDetail = function(args)
   local hitInfo = sdk.to_managed_object(args[3])
   local hitOwner = hitInfo:getActualAttackOwner()
 
-    -- Get the master player's character GameObject
+  -- Get the master player's character GameObject
   local pm = SkillUptime.Core.GetSingleton("app.PlayerManager")
   local playerInfo = pm and pm:getMasterPlayer() or nil
   local playerChar = playerInfo and playerInfo:get_Character() or nil
@@ -1829,18 +1832,18 @@ SkillUptime.Hooks.onCalcStockDamage = function(args)
   -- Handle Weakness Exploit and Mind's eye skill uptime.
   if unwoundedHzv.raw >= 45 and isWexActive then
     SkillUptime.Skills.hits_up[WEX_ID]   = (SkillUptime.Skills.hits_up[WEX_ID] or 0) + 1
-    SkillUptime.Skills.mv_up[WEX_ID]     = (SkillUptime.Skills.mv_up[WEX_ID]   or 0) + motionValue
-    SkillUptime.Skills.mvxhzv_up[WEX_ID] = (SkillUptime.Skills.mvxhzv_up[WEX_ID]   or 0) + MVxHZV
+    SkillUptime.Skills.mv_up[WEX_ID]     = (SkillUptime.Skills.mv_up[WEX_ID] or 0) + motionValue
+    SkillUptime.Skills.mvxhzv_up[WEX_ID] = (SkillUptime.Skills.mvxhzv_up[WEX_ID] or 0) + MVxHZV
 
     if isHitWound then
       SkillUptime.Skills.hits_up[WEX_WOUND_ID]   = (SkillUptime.Skills.hits_up[WEX_WOUND_ID] or 0) + 1
-      SkillUptime.Skills.mv_up[WEX_WOUND_ID]     = (SkillUptime.Skills.mv_up[WEX_WOUND_ID]   or 0) + motionValue
-      SkillUptime.Skills.mvxhzv_up[WEX_WOUND_ID] = (SkillUptime.Skills.mvxhzv_up[WEX_WOUND_ID]   or 0) + MVxHZV
+      SkillUptime.Skills.mv_up[WEX_WOUND_ID]     = (SkillUptime.Skills.mv_up[WEX_WOUND_ID] or 0) + motionValue
+      SkillUptime.Skills.mvxhzv_up[WEX_WOUND_ID] = (SkillUptime.Skills.mvxhzv_up[WEX_WOUND_ID] or 0) + MVxHZV
     end
   elseif unwoundedHzv.raw < 45 and isMindsEyeActive then
     SkillUptime.Skills.hits_up[MINDS_EYE_ID]   = (SkillUptime.Skills.hits_up[MINDS_EYE_ID] or 0) + 1
-    SkillUptime.Skills.mv_up[MINDS_EYE_ID]     = (SkillUptime.Skills.mv_up[MINDS_EYE_ID]   or 0) + motionValue
-    SkillUptime.Skills.mvxhzv_up[MINDS_EYE_ID] = (SkillUptime.Skills.mvxhzv_up[MINDS_EYE_ID]   or 0) + MVxHZV
+    SkillUptime.Skills.mv_up[MINDS_EYE_ID]     = (SkillUptime.Skills.mv_up[MINDS_EYE_ID] or 0) + motionValue
+    SkillUptime.Skills.mvxhzv_up[MINDS_EYE_ID] = (SkillUptime.Skills.mvxhzv_up[MINDS_EYE_ID] or 0) + MVxHZV
   end
 end
 
@@ -1860,7 +1863,7 @@ SkillUptime.Hooks.onQuestEnter = function()
 
   -- reset monster contexts
   SkillUptime.Context.resetAll()
-  
+
   -- Auto-close config on quest start if enabled in settings
   if config.autoClose then
     config.open = false
@@ -1891,11 +1894,11 @@ SkillUptime.Hooks.reset_all = function()
   for _, rec in pairs(SkillUptime.Status and SkillUptime.Status.SkillData or {}) do
     rec.Activated = false; rec.Timer = 0
   end
-  SkillUptime.Hits.total = 0;    SkillUptime.Skills.hits_up = {};   SkillUptime.Items.hits_up = {};   SkillUptime.Flags.hits_up = {}
-  SkillUptime.MV.total = 0;      SkillUptime.Skills.mv_up = {};     SkillUptime.Items.mv_up = {};     SkillUptime.Flags.mv_up = {}
-  SkillUptime.MVxHZV.total = 0;  SkillUptime.Skills.mvxhzv_up = {}; SkillUptime.Items.mvxhzv_up = {}; SkillUptime.Flags.mvxhzv_up = {}
-  SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {};       SkillUptime.Moves.names = {};     SkillUptime.Moves.total = 0;
-  SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {};    SkillUptime.Moves.maxHit = {}
+  SkillUptime.Hits.total = 0; SkillUptime.Skills.hits_up = {}; SkillUptime.Items.hits_up = {}; SkillUptime.Flags.hits_up = {}
+  SkillUptime.MV.total = 0; SkillUptime.Skills.mv_up = {}; SkillUptime.Items.mv_up = {}; SkillUptime.Flags.mv_up = {}
+  SkillUptime.MVxHZV.total = 0; SkillUptime.Skills.mvxhzv_up = {}; SkillUptime.Items.mvxhzv_up = {}; SkillUptime.Flags.mvxhzv_up = {}
+  SkillUptime.Moves.damage = {}; SkillUptime.Moves.hits = {}; SkillUptime.Moves.names = {}; SkillUptime.Moves.total = 0;
+  SkillUptime.Moves.colIds = {}; SkillUptime.Moves.wpTypes = {}; SkillUptime.Moves.maxHit = {}
   SkillUptime.Util.logDebug("Manual reset requested")
 end
 
@@ -2014,17 +2017,17 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   for sid, rec in pairs(SkillUptime.Status and SkillUptime.Status.SkillData or {}) do
     if rec and rec.Activated and (not SkillUptime.Skills.is_excluded_skill(sid)) then
       SkillUptime.Skills.hits_up[sid]   = (SkillUptime.Skills.hits_up[sid] or 0) + 1
-      SkillUptime.Skills.mv_up[sid]     = (SkillUptime.Skills.mv_up[sid]   or 0) + motionValue
-      SkillUptime.Skills.mvxhzv_up[sid] = (SkillUptime.Skills.mvxhzv_up[sid]   or 0) + MVxHZV
-      counted[sid] = true
+      SkillUptime.Skills.mv_up[sid]     = (SkillUptime.Skills.mv_up[sid] or 0) + motionValue
+      SkillUptime.Skills.mvxhzv_up[sid] = (SkillUptime.Skills.mvxhzv_up[sid] or 0) + MVxHZV
+      counted[sid]                      = true
     end
   end
   for sid, on in pairs(SkillUptime.Skills.running or {}) do
     if on and (not SkillUptime.Skills.is_excluded_skill(sid)) and not counted[sid] then
       SkillUptime.Skills.hits_up[sid]   = (SkillUptime.Skills.hits_up[sid] or 0) + 1
-      SkillUptime.Skills.mv_up[sid]     = (SkillUptime.Skills.mv_up[sid]   or 0) + motionValue
-      SkillUptime.Skills.mvxhzv_up[sid] = (SkillUptime.Skills.mvxhzv_up[sid]   or 0) + MVxHZV
-      counted[sid] = true
+      SkillUptime.Skills.mv_up[sid]     = (SkillUptime.Skills.mv_up[sid] or 0) + motionValue
+      SkillUptime.Skills.mvxhzv_up[sid] = (SkillUptime.Skills.mvxhzv_up[sid] or 0) + MVxHZV
+      counted[sid]                      = true
     end
   end
 
@@ -2032,8 +2035,8 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   for name, rec in pairs(SkillUptime.Items.data or {}) do
     if rec and rec.Activated then
       SkillUptime.Items.hits_up[name]   = (SkillUptime.Items.hits_up[name] or 0) + 1
-      SkillUptime.Items.mv_up[name]     = (SkillUptime.Items.mv_up[name]   or 0) + motionValue
-      SkillUptime.Items.mvxhzv_up[name] = (SkillUptime.Items.mvxhzv_up[name]   or 0) + MVxHZV
+      SkillUptime.Items.mv_up[name]     = (SkillUptime.Items.mv_up[name] or 0) + motionValue
+      SkillUptime.Items.mvxhzv_up[name] = (SkillUptime.Items.mvxhzv_up[name] or 0) + MVxHZV
     end
   end
 
@@ -2041,18 +2044,18 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   for fid, rec in pairs(SkillUptime.Flags.data or {}) do
     if rec and rec.Activated then
       SkillUptime.Flags.hits_up[fid]   = (SkillUptime.Flags.hits_up[fid] or 0) + 1
-      SkillUptime.Flags.mv_up[fid]     = (SkillUptime.Flags.mv_up[fid]   or 0) + motionValue
-      SkillUptime.Flags.mvxhzv_up[fid] = (SkillUptime.Flags.mvxhzv_up[fid]   or 0) + MVxHZV
+      SkillUptime.Flags.mv_up[fid]     = (SkillUptime.Flags.mv_up[fid] or 0) + motionValue
+      SkillUptime.Flags.mvxhzv_up[fid] = (SkillUptime.Flags.mvxhzv_up[fid] or 0) + MVxHZV
     end
   end
 
   ---------------------------------------------------------------------------------------
-  -- Attribute ExtraHit damage to their source skills                                   
+  -- Attribute ExtraHit damage to their source skills
   ---------------------------------------------------------------------------------------
   local extraHits = atkData._SkillAdditinalDamageArray._Array
   local elemAttrMap = { "fire", "water", "thunder", "ice", "dragon" }
   local UDRA_SID = SkillUptime.Const.NU_UDRAS_MUTINY_SKILL_ID
-  
+
   -- 1. calculate final damage and aggregate by skill ID --------------------------------
   local batchDmg = {}
   for _, v in pairs(extraHits) do
@@ -2065,16 +2068,16 @@ SkillUptime.Hooks.onHunterHitPost = function(args)
   end
 
   -- 2. Update tracker: Commit damage to the global procs table -------------------------
-  local pr  = SkillUptime.Procs
+  local pr = SkillUptime.Procs
   for skillID, damage in pairs(batchDmg) do
-    local idx = "EXTRA:" .. tostring(skillID)
-    
+    local idx      = "EXTRA:" .. tostring(skillID)
+
     pr.types[idx]  = pr.types[idx] or "EXTRA"
     pr.names[idx]  = pr.names[idx] or SkillUptime.Skills.resolve_name(skillID)
     pr.maxHit[idx] = math.max(pr.maxHit[idx] or 0, damage)
     pr.damage[idx] = (pr.damage[idx] or 0) + damage
     pr.hits[idx]   = (pr.hits[idx] or 0) + 1
-    pr.total = (pr.total or 0) + damage
+    pr.total       = (pr.total or 0) + damage
   end
 end
 
@@ -2105,7 +2108,7 @@ SkillUptime.UI.draw = function()
   if not config.enabled then return end
   if not config.open then return end
   if config.hideWithREFrameworkUI and not reframework:is_drawing_ui() then return end
-  
+
   local __as = SkillUptime.Strategy.get_active()
   local __title = "Skill Uptime Tracker: " .. ((__as and __as.label) or "")
   local window_open = imgui.begin_window(__title, true, 64)
@@ -2690,15 +2693,15 @@ SkillUptime.UI.draw = function()
           -- Hits column
           imgui.table_set_column_index(2)
           imgui.text(tostring(r.hits))
-          
+
           -- Total Damage column
           imgui.table_set_column_index(3)
           imgui.text(string.format("%.0f", r.dmg))
-          
+
           -- Highest Single Hit column
           imgui.table_set_column_index(4)
           imgui.text(r.maxHit > 0 and string.format("%.0f", r.maxHit) or "-")
-          
+
           -- Dmg % column
           imgui.table_set_column_index(5)
           imgui.text(string.format("%.1f%%", (r.dmg / totalDmg) * 100.0))
@@ -2749,100 +2752,101 @@ re.on_draw_ui(function()
 
     -- Only show other UI elements if mod is enabled
     if config.enabled then
-    local _
-    -- Tracking Strategy dropdown (reduced width)
-    imgui.push_item_width(180)
-    local changed
-    changed, config.strategy.index = imgui.combo("Tracking Strategy", config.strategy.index or 1,
-      SkillUptime.Strategy.labels)
-    imgui.pop_item_width()
-    if changed then
-      SkillUptime.Config.save()
-    end
-    -- (Currently only two options; reserved for future strategies.)
-    local toggled
-    toggled, config.tables.skills = imgui.checkbox("Skills", config.tables.skills)
-    if toggled then
-      SkillUptime.Config.save()
-    end
-    toggled, config.tables.items = imgui.checkbox("Item Buffs", config.tables.items)
-    if toggled then
-      SkillUptime.Config.save()
-    end
-    toggled, config.tables.movedamage = imgui.checkbox("Move Damage", config.tables.movedamage)
-    if toggled then
-      SkillUptime.Config.save()
-    end
-    toggled, config.tables.flags = imgui.checkbox("Status Flags", config.tables.flags)
-    if toggled then
-      SkillUptime.Config.save()
-    end
-    imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
-    toggled, config.tables.procdamage = imgui.checkbox("Proc Damage", config.tables.procdamage)
-    if toggled then
-      SkillUptime.Config.save()
-    end
-    imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
-    -- General Settings
-    if imgui.tree_node("General Settings") then
-      local autoOpenChanged, autoOpen = imgui.checkbox("Open Window on Quest End", config.autoOpen == true)
-      if autoOpenChanged then
-        config.autoOpen = autoOpen and true or false; SkillUptime.Config.save()
-      end
-      local autoCloseChanged, autoClose = imgui.checkbox("Close Window on Quest Start", config.autoClose == true)
-      if autoCloseChanged then
-        config.autoClose = autoClose and true or false; SkillUptime.Config.save()
-      end
-      local hideWithREFrameworkUIChanged, hideWithREFrameworkUI = imgui.checkbox("Hide with REFramwork UI", config.hideWithREFrameworkUI == true)
-      if hideWithREFrameworkUIChanged then
-        config.hideWithREFrameworkUI = hideWithREFrameworkUI and true or false; SkillUptime.Config.save()
-      end
-      local hbChanged, hb = imgui.checkbox("Hide Reset Button", config.hideButtons == true)
-      if hbChanged then
-        config.hideButtons = hb and true or false; SkillUptime.Config.save()
-      end
-      imgui.tree_pop()
-    end
-    -- Table Column Settings
-    if imgui.tree_node("Table Column Settings") then
-      local c
-      c, config.columns.primary = imgui.checkbox("Show Uptime/Hits column", config.columns.primary)
-      if c then
+      local _
+      -- Tracking Strategy dropdown (reduced width)
+      imgui.push_item_width(180)
+      local changed
+      changed, config.strategy.index = imgui.combo("Tracking Strategy", config.strategy.index or 1,
+        SkillUptime.Strategy.labels)
+      imgui.pop_item_width()
+      if changed then
         SkillUptime.Config.save()
       end
-      c, config.columns.percent = imgui.checkbox("Show Uptime %", config.columns.percent)
-      if c then
+      -- (Currently only two options; reserved for future strategies.)
+      local toggled
+      toggled, config.tables.skills = imgui.checkbox("Skills", config.tables.skills)
+      if toggled then
         SkillUptime.Config.save()
       end
-      c, config.columns.active = imgui.checkbox("Show Active Time", config.columns.active)
-      if c then
+      toggled, config.tables.items = imgui.checkbox("Item Buffs", config.tables.items)
+      if toggled then
         SkillUptime.Config.save()
       end
-      c, config.columns.state = imgui.checkbox("Show State", config.columns.state)
-      if c then
+      toggled, config.tables.movedamage = imgui.checkbox("Move Damage", config.tables.movedamage)
+      if toggled then
         SkillUptime.Config.save()
       end
-      imgui.tree_pop()
-    end
-    -- Developer Options
-    if imgui.tree_node("Developer Options") then
-      local dchg, dbg = imgui.checkbox("Debug Mode (console logs)", config.debug == true)
-      if dchg then
-        config.debug = dbg and true or false
+      toggled, config.tables.flags = imgui.checkbox("Status Flags", config.tables.flags)
+      if toggled then
         SkillUptime.Config.save()
       end
-      imgui.tree_pop()
-    end
-    local buttonText = config.open and "Close Skill Uptime Overview" or "Show Skill Uptime Overview"
-    if imgui.button(buttonText) then
-      config.open = not config.open
-      SkillUptime.Config.save()
-    end
-    imgui.same_line()
-    if imgui.button("Reset Uptime") then
-      SkillUptime.Hooks.reset_all(); SkillUptime.Config.save()
-    end
-    imgui.spacing()
+      imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
+      toggled, config.tables.procdamage = imgui.checkbox("Proc Damage", config.tables.procdamage)
+      if toggled then
+        SkillUptime.Config.save()
+      end
+      imgui.same_line(); imgui.text_colored("(experimental)", SkillUptime.Const.COLOR_RED)
+      -- General Settings
+      if imgui.tree_node("General Settings") then
+        local autoOpenChanged, autoOpen = imgui.checkbox("Open Window on Quest End", config.autoOpen == true)
+        if autoOpenChanged then
+          config.autoOpen = autoOpen and true or false; SkillUptime.Config.save()
+        end
+        local autoCloseChanged, autoClose = imgui.checkbox("Close Window on Quest Start", config.autoClose == true)
+        if autoCloseChanged then
+          config.autoClose = autoClose and true or false; SkillUptime.Config.save()
+        end
+        local hideWithREFrameworkUIChanged, hideWithREFrameworkUI = imgui.checkbox("Hide with REFramwork UI",
+          config.hideWithREFrameworkUI == true)
+        if hideWithREFrameworkUIChanged then
+          config.hideWithREFrameworkUI = hideWithREFrameworkUI and true or false; SkillUptime.Config.save()
+        end
+        local hbChanged, hb = imgui.checkbox("Hide Reset Button", config.hideButtons == true)
+        if hbChanged then
+          config.hideButtons = hb and true or false; SkillUptime.Config.save()
+        end
+        imgui.tree_pop()
+      end
+      -- Table Column Settings
+      if imgui.tree_node("Table Column Settings") then
+        local c
+        c, config.columns.primary = imgui.checkbox("Show Uptime/Hits column", config.columns.primary)
+        if c then
+          SkillUptime.Config.save()
+        end
+        c, config.columns.percent = imgui.checkbox("Show Uptime %", config.columns.percent)
+        if c then
+          SkillUptime.Config.save()
+        end
+        c, config.columns.active = imgui.checkbox("Show Active Time", config.columns.active)
+        if c then
+          SkillUptime.Config.save()
+        end
+        c, config.columns.state = imgui.checkbox("Show State", config.columns.state)
+        if c then
+          SkillUptime.Config.save()
+        end
+        imgui.tree_pop()
+      end
+      -- Developer Options
+      if imgui.tree_node("Developer Options") then
+        local dchg, dbg = imgui.checkbox("Debug Mode (console logs)", config.debug == true)
+        if dchg then
+          config.debug = dbg and true or false
+          SkillUptime.Config.save()
+        end
+        imgui.tree_pop()
+      end
+      local buttonText = config.open and "Close Skill Uptime Overview" or "Show Skill Uptime Overview"
+      if imgui.button(buttonText) then
+        config.open = not config.open
+        SkillUptime.Config.save()
+      end
+      imgui.same_line()
+      if imgui.button("Reset Uptime") then
+        SkillUptime.Hooks.reset_all(); SkillUptime.Config.save()
+      end
+      imgui.spacing()
     end
     if imgui.unindent then imgui.unindent(__inner_pad) end
     if imgui.dummy then imgui.dummy(0, __inner_pad) end
