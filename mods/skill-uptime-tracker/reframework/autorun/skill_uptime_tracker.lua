@@ -1792,6 +1792,10 @@ SkillUptime.Hooks.onCalcStockDamage = function(args)
   local partsArray = enemyCtx.Parts._ParamParts._PartsArray._DataArray
   local partsIndex = preCalcDmg.Common.PartsIndex
   local dmgParts = enemyCtx.Parts._DmgParts
+
+  --
+  if not dmgParts[partsIndex] then return end
+
   local meatSlot = dmgParts[partsIndex]:get_MeatSlot()
   local meatUnwoundedGuid = partsArray[partsIndex]:getPartsMeatGuid(meatSlot)
   local meatUnwoundedIndex = enemyCtx.Parts._ParamParts:getMeatIndex(meatUnwoundedGuid)._Value
