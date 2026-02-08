@@ -90,7 +90,8 @@ local SkillIDMax                      = TD_SkillEnum:get_field("MAX"):get_data()
 -- ============================================================================
 -- Configuration and State Management
 -- ============================================================================
-local config = {
+local config                          = {
+  enabled = true,
   open = false,
   tables = { skills = true, items = false, flags = false, movedamage = false, procdamage = false },
   columns = { primary = true, percent = true, active = true, state = true },
@@ -1793,7 +1794,7 @@ SkillUptime.Hooks.onCalcStockDamage = function(args)
   local partsIndex = preCalcDmg.Common.PartsIndex
   local dmgParts = enemyCtx.Parts._DmgParts
 
-  --
+  -- exit here if invalid part index
   if not dmgParts[partsIndex] then return end
 
   local meatSlot = dmgParts[partsIndex]:get_MeatSlot()
@@ -2101,6 +2102,7 @@ end
 -- UI Rendering
 -- ============================================================================
 SkillUptime.UI.draw = function()
+  if not config.enabled then return end
   if not config.open then return end
   if config.hideWithREFrameworkUI and not reframework:is_drawing_ui() then return end
   
@@ -2736,6 +2738,17 @@ re.on_draw_ui(function()
     if imgui.indent then imgui.indent(__inner_pad) end
     imgui.text("Displays the uptime of skills, item buffs, and status flags while in battle.")
     imgui.spacing()
+
+    -- Enable mod checkbox
+    local enabledChanged, enabledValue = imgui.checkbox("Enable mod", config.enabled == true)
+    if enabledChanged then
+      config.enabled = enabledValue and true or false
+      SkillUptime.Config.save()
+    end
+    imgui.spacing()
+
+    -- Only show other UI elements if mod is enabled
+    if config.enabled then
     local _
     -- Tracking Strategy dropdown (reduced width)
     imgui.push_item_width(180)
@@ -2830,6 +2843,7 @@ re.on_draw_ui(function()
       SkillUptime.Hooks.reset_all(); SkillUptime.Config.save()
     end
     imgui.spacing()
+    end
     if imgui.unindent then imgui.unindent(__inner_pad) end
     if imgui.dummy then imgui.dummy(0, __inner_pad) end
     imgui.end_rect(2)
@@ -2868,6 +2882,8 @@ end
 -- Main Frame Loop
 -- ============================================================================
 re.on_frame(function()
+  if not config.enabled then return end
+
   -- Update all tracker state
   update_tracker_state()
 
