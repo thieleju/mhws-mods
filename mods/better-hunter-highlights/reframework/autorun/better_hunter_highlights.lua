@@ -39,6 +39,8 @@ local getTextHelper                           = messageUtilType:get_method("getT
 local selectedHunterId                        = ""
 local memberAwardStats                        = {}
 local awardList                               = {}
+local awardListResolved                       = false
+local lastAwardListRetry                      = 0
 local showAwardWindow                         = false
 local userIndexCache                          = {}
 local config                                  = { enabled = true, debug = false, writeToFile = false, cache = {}, displayAwardIds = {} }
@@ -51,6 +53,7 @@ local DAMAGE_AWARD_ID                         = 4
 local SUBMENU_CHAR_LIMIT                      = 35
 local MIN_TABLE_COLUMN_WIDTH                  = 130
 local AWARD_NUM_MAX                           = 29
+local AWARD_LIST_RETRY_INTERVAL               = 2 -- seconds
 
 local AWARD_UNIT                              = { COUNT = 0, TIME = 1, NONE = 2 }
 local SESSION_TYPE                            = { LOBBY = 1, QUEST = 2, LINK = 3 }
@@ -190,17 +193,32 @@ local function getAwardUnit(awardId)
 end
 
 --- Updates awardList with localized names and explanations
+--- At script load the game's message data is usually not loaded yet, so getText returns "".
+--- Entries without a name are retried on every call until they resolve.
+--- @return boolean True if all awards have a name
 local function updateAwardList()
+  local allResolved = true
   for i = 0, AWARD_NUM_MAX do
+    local award = awardList[i + 1]
+    if not award then
+      award = { awardId = i, name = "", explain = "", unit = AWARD_UNIT.NONE }
+      awardList[i + 1] = award
+    end
     -- get localized name and explaination for each award
-    awardList[i + 1] = {
-      awardId = i,
-      name = getAwardName(i) or "",
-      explain = getAwardExplain(i) or "",
-      unit = getAwardUnit(i) or AWARD_UNIT.NONE
-    }
+    if award.name == "" then
+      award.name = getAwardName(i) or ""
+      award.explain = getAwardExplain(i) or ""
+      award.unit = getAwardUnit(i) or AWARD_UNIT.NONE
+      if award.name == "" then
+        allResolved = false
+      end
+    end
   end
-  logDebug(string.format("AwardList initialized with %d awards", #awardList))
+  awardListResolved = allResolved
+  if allResolved then
+    logDebug(string.format("AwardList initialized with %d awards", #awardList))
+  end
+  return allResolved
 end
 
 -- Get user info for the current quest
@@ -519,6 +537,11 @@ local function onRequestSubMenu(args)
     end
   end
 
+  -- names may not have been available at script load
+  if not awardListResolved then
+    updateAwardList()
+  end
+
   local guid = newGuid:call(nil)
   local submenuItemCount = 0
 
@@ -526,19 +549,6 @@ local function onRequestSubMenu(args)
   for i = 1, #awardList do
     local award = awardList[i]
     local memberAwardData = memberAward.awards[i]
-
-    -- after TU2 sometimes the award names are missing
-    if not award.name or award.name == "" then
-      logDebug(" award ID object: " .. json.encode(award))
-      logError(string.format("Award %d has no name, requesting name again", award.awardId))
-
-      awardList[i].name = getAwardName(award.awardId) or ""
-      awardList[i].explain = getAwardExplain(award.awardId) or ""
-      awardList[i].unit = getAwardUnit(award.awardId) or AWARD_UNIT.NONE
-
-      logDebug(string.format("Award %d updated to: %s (%s), %s, Unit: %d",
-        award.awardId, awardList[i].name, awardList[i].explain, awardList[i].unit))
-    end
 
     -- Skip if award is not enabled or has no count
     if config.displayAwardIds[tostring(award.awardId)] and
@@ -650,12 +660,21 @@ local function onQuestPlayingEnter()
 end
 
 -- Helper function to register hooks
+-- The pre hook is wrapped in pcall so a Lua error never leaves the game in a broken state
 local function registerHook(method, pre, post)
   if not method then
     logError("Cannot register hook, method is nil")
     return false
   end
-  sdk.hook(method, pre, post)
+  local safePre = pre and function(args)
+    local ok, result = pcall(pre, args)
+    if not ok then
+      logError("Hook " .. tostring(method:get_name()) .. ": " .. tostring(result))
+      return sdk.PreHookResult.CALL_ORIGINAL
+    end
+    return result
+  end
+  sdk.hook(method, safePre, post)
   logDebug(string.format("Hook registered for method: %s", tostring(method:get_name())))
   return true
 end
@@ -698,67 +717,62 @@ local function drawAwardWindow()
       imgui.table_headers_row()
 
       -- loop through awardList
-      for awardIndex = 1, #awardList do
-        -- make sure awards names are updated
-        if not awardList[awardIndex].name or awardList[awardIndex].name == "" then
-          logError(string.format("Award %d has no name, requesting name again", awardList[awardIndex].awardId))
-          awardList[awardIndex].name = getAwardName(awardList[awardIndex].awardId) or ""
-          awardList[awardIndex].explain = getAwardExplain(awardList[awardIndex].awardId) or ""
-          awardList[awardIndex].unit = getAwardUnit(awardList[awardIndex].awardId) or AWARD_UNIT.NONE
-          logDebug(string.format("Award %d updated to: %s (%s), %s, Unit: %d",
-            awardList[awardIndex].awardId, awardList[awardIndex].name, awardList[awardIndex].explain,
-            awardList[awardIndex].unit))
-        end
+      -- wrapped in pcall so end_table/end_window are always reached, unbalanced imgui calls crash the game
+      local ok, err = pcall(function()
+        for awardIndex = 1, #awardList do
+          local award = awardList[awardIndex]
+          if config.displayAwardIds[tostring(award.awardId)] then
+            imgui.table_next_row()
 
-        local award = awardList[awardIndex]
-        if config.displayAwardIds[tostring(award.awardId)] then
-          imgui.table_next_row()
+            imgui.table_set_column_index(0)
+            imgui.text(tostring(awardIndex))
 
-          imgui.table_set_column_index(0)
-          imgui.text(tostring(awardIndex))
+            imgui.table_set_column_index(1)
+            imgui.text(award.name or ("Award " .. tostring(awardIndex)))
 
-          imgui.table_set_column_index(1)
-          imgui.text(award.name or ("Award " .. tostring(awardIndex)))
+            imgui.table_set_column_index(2)
+            imgui.text(award.explain or "")
 
-          imgui.table_set_column_index(2)
-          imgui.text(award.explain or "")
+            -- columns per player
+            for playerIndex = 1, #memberAwardStats do
+              local player = memberAwardStats[playerIndex]
+              local awardData = player.awards and player.awards[awardIndex]
+              local awardListData = awardList[awardIndex]
+              imgui.table_set_column_index(2 + playerIndex)
 
-          -- columns per player
-          for playerIndex = 1, #memberAwardStats do
-            local player = memberAwardStats[playerIndex]
-            local awardData = player.awards and player.awards[awardIndex]
-            local awardListData = awardList[awardIndex]
-            imgui.table_set_column_index(2 + playerIndex)
+              local count = awardData and awardData.count or 0
+              local valueStr = tostring(count)
 
-            local count = awardData and awardData.count or 0
-            local valueStr = tostring(count)
-
-            if awardData and awardData.awardId == DAMAGE_AWARD_ID then
-              if config.displayAwardIds[tostring(DAMAGE_AWARD_ID)] == false then
-                valueStr = "<hidden>"
-              else
-                local percent = player.damagePercentage or 0
-                valueStr = string.format("%.0f (%.2f%%)", count, percent)
+              if awardData and awardData.awardId == DAMAGE_AWARD_ID then
+                if config.displayAwardIds[tostring(DAMAGE_AWARD_ID)] == false then
+                  valueStr = "<hidden>"
+                else
+                  local percent = player.damagePercentage or 0
+                  valueStr = string.format("%.0f (%.2f%%)", count, percent)
+                end
               end
-            end
 
-            if awardData and awardListData.unit == AWARD_UNIT.TIME then
-              local totalSeconds = awardData.count
-              local minutes = math.floor(totalSeconds / 60)
-              local seconds = math.floor(totalSeconds % 60)
-              local hundredths = math.floor((totalSeconds - math.floor(totalSeconds)) * 100)
-              valueStr = string.format("%02d'%02d\"%02d", minutes, seconds, hundredths)
-            end
+              if awardData and awardListData.unit == AWARD_UNIT.TIME then
+                local totalSeconds = awardData.count
+                local minutes = math.floor(totalSeconds / 60)
+                local seconds = math.floor(totalSeconds % 60)
+                local hundredths = math.floor((totalSeconds - math.floor(totalSeconds)) * 100)
+                valueStr = string.format("%02d'%02d\"%02d", minutes, seconds, hundredths)
+              end
 
-            -- highlight non-zero values
-            if valueStr ~= "0" and valueStr ~= "" and valueStr ~= "00'00\"00" and valueStr ~= "<hidden>" then
-              local colorIndex = (playerIndex - 1) % #COLORS + 1
-              imgui.table_set_bg_color(3, COLORS[colorIndex], imgui.table_get_column_index())
-            end
+              -- highlight non-zero values
+              if valueStr ~= "0" and valueStr ~= "" and valueStr ~= "00'00\"00" and valueStr ~= "<hidden>" then
+                local colorIndex = (playerIndex - 1) % #COLORS + 1
+                imgui.table_set_bg_color(3, COLORS[colorIndex], imgui.table_get_column_index())
+              end
 
-            imgui.text(valueStr)
+              imgui.text(valueStr)
+            end
           end
         end
+      end)
+      if not ok then
+        logError("drawAwardWindow: " .. tostring(err))
       end
       imgui.end_table()
     end
@@ -889,6 +903,10 @@ re.on_draw_ui(function()
   end
 end)
 
+-- Fill awardList before loading the config so default displayAwardIds contain every award.
+-- Names are probably still empty here, they get resolved later in re.on_frame.
+updateAwardList()
+
 -- Load configuration and add config save listener
 loadConfig()
 
@@ -914,5 +932,11 @@ registerHook(guiInputCtrlFluentScrollListIndexChange, onIndexChange, nil)
 -- Called when entering quest playing state
 registerHook(cQuestPlayingEnter, onQuestPlayingEnter, nil)
 
--- Update the award list with localized names and explanations
-updateAwardList()
+-- Retry resolving localized award names until the game's message data is loaded
+re.on_frame(function()
+  if awardListResolved then return end
+  local now = os.clock()
+  if now - lastAwardListRetry < AWARD_LIST_RETRY_INTERVAL then return end
+  lastAwardListRetry = now
+  updateAwardList()
+end)
