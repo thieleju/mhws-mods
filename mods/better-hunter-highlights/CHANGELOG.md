@@ -1,3 +1,10 @@
+# [better-hunter-highlights-v1.6.5](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.6.4...better-hunter-highlights-v1.6.5) (2026-10-19)
+
+
+### Bug Fixes
+
+* fix reward names not resolving on startup ([dbdede5](https://github.com/thieleju/mhws-mods/commit/dbdede5d94f7f001dc900e0e25f49375427cee1d))
+
 # [better-hunter-highlights-v1.6.4](https://github.com/thieleju/mhws-mods/compare/better-hunter-highlights-v1.6.3...better-hunter-highlights-v1.6.4) (2026-02-07)
 
 
