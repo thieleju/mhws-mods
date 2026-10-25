@@ -9,10 +9,19 @@
 --   element_soft  element damage at or above that limit (or ignoring hitzones)
 --   fixed         hitzone-independent damage (hunting horn, gunlance shells, ...)
 --   proc          numbers without a hit of our own: status/skill procs (blast, White Flame Torrent, ...)
+-- With separate element colors on, element damage uses fire_hard, fire_soft, water_hard, ...
+-- instead of element_hard/element_soft.
 --
 ---@diagnostic disable: undefined-global
 
+-------------------------------------------------------------------------------
+-- Constants
+-------------------------------------------------------------------------------
+
 local CONFIG_FILE = "split_damage_numbers.json"
+-- The game never resets the style of the slots' Text objects itself, not even after a script
+-- reset, so their style from before our first change is kept in this file to put back when disabled
+local ORIGINALS_FILE = "split_damage_numbers_originals.json"
 
 local DEFAULT_HARD_HITZONE = 45
 local DEFAULT_HARD_ELEMENT_HITZONE = 20
@@ -27,6 +36,9 @@ local HIT_TTL = 2.0 -- seconds a queued hit or element part waits for its number
 -- Smaller element parts are not split off but counted as physical: some attacks (shelling,
 -- spread pellets with Burst, ...) carry a tiny bit of element that would only show as a "0".
 local MIN_SPLIT_ELEMENT = 1.0
+-- Dragging a slider or picker changes the config every frame; it is written once the changes stop
+local SAVE_DELAY = 0.5
+local DEBUG_MAX = 100 -- events kept in the debug log
 
 local REQUEST_DAMAGE_SIG =
 "requestDamage(via.vec3, System.Single, app.GUI020020.State, app.TARGET_ACCESS_KEY.CATEGORY, app.GUI020020.DAMAGE_TYPE, app.GUI020020.CRITICAL_STATE, System.Boolean, System.Boolean, System.Action`1<app.GUI020020.DAMAGE_INFO>)"
@@ -35,9 +47,9 @@ local REQUEST_DAMAGE_GUI_SIG =
 local CALC_STOCK_DAMAGE_SIG =
 "calcStockDamage(app.cEnemyStockDamage.cCalcDamage, app.cEnemyStockDamage.cPreCalcDamage, app.cEnemyStockDamage.cDamageRate, System.Boolean)"
 
--------------------------------------------------------------------------------
--- Colors and config
--------------------------------------------------------------------------------
+-- app.HitDef.ATTR values of the elements (preCalc.AttackAttr)
+local ELEMENTS = { [1] = "fire", [2] = "water", [3] = "thunder", [4] = "ice", [5] = "dragon" }
+local ELEMENT_LABELS = { fire = "Fire", water = "Water", thunder = "Thunder", ice = "Ice", dragon = "Dragon" }
 
 local KINDS = { "hard", "soft", "element_hard", "element_soft", "fixed", "proc" }
 local KIND_LABELS = {
@@ -56,6 +68,17 @@ local KIND_HINTS = {
     fixed = "damage that ignores hitzones, e.g. gunlance shells, hunting horn bubble procs, ...",
     proc = "extra hits from skills and status procs, e.g. white flame torrent, scorcher, blast procs, ...",
 }
+-- Per element kinds, used instead of element_hard/element_soft with separate element colors on
+local ELEMENT_KINDS = {}
+for _, element in ipairs(ELEMENTS) do
+    for _, zone in ipairs({ "hard", "soft" }) do
+        local kind = element .. "_" .. zone
+        ELEMENT_KINDS[kind] = true
+        KINDS[#KINDS + 1] = kind
+        KIND_LABELS[kind] = ELEMENT_LABELS[element] .. " " .. zone
+        KIND_HINTS[kind] = element .. " damage on " .. (zone == "hard" and "tough parts" or "weak parts")
+    end
+end
 local PHYSICAL_KINDS = { hard = true, soft = true, fixed = true }
 
 local DEFAULT_COLORS = {
@@ -65,6 +88,16 @@ local DEFAULT_COLORS = {
     element_soft = { Fill = 0xFF6E6EFD, Glow = 0xE6161632 },
     fixed = { Fill = 0xFFFBA7C5, Glow = 0xE6322127 },
     proc = { Fill = 0xFFFFBE6E, Glow = 0xE6321A0A },
+    fire_hard = { Fill = 0xFF1437B9, Glow = 0xE6040B25 },
+    fire_soft = { Fill = 0xFF3C78FF, Glow = 0xE60C1833 },
+    water_hard = { Fill = 0xFFAA4114, Glow = 0xE6220D04 },
+    water_soft = { Fill = 0xFFFF8C3C, Glow = 0xE6331C0C },
+    thunder_hard = { Fill = 0xFF1496B4, Glow = 0xE6041E24 },
+    thunder_soft = { Fill = 0xFF46E6FF, Glow = 0xE60E2E33 },
+    ice_hard = { Fill = 0xFFAA963C, Glow = 0xE6221E0C },
+    ice_soft = { Fill = 0xFFF0F0A0, Glow = 0xE6303020 },
+    dragon_hard = { Fill = 0xFF961E73, Glow = 0xE61E0617 },
+    dragon_soft = { Fill = 0xFFFF5AC8, Glow = 0xE6331228 },
 }
 
 -- Shared by all kinds, taken from the game's own styles
@@ -72,11 +105,45 @@ local TEXT_GLOW = 0xFFC0C0C0
 local TEXT_SHADOW = 0x66000000
 local DESIGN_SHADOW = 0xFF404040
 
--- A dark tint of the text color, like the glows of the game's own number styles
-local function DeriveGlow(fill)
-    local r, g, b = fill & 0xFF, (fill >> 8) & 0xFF, (fill >> 16) & 0xFF
-    return 0xE6000000 | (math.floor(b * 0.2) << 16) | (math.floor(g * 0.2) << 8) | math.floor(r * 0.2)
+-- Game damage values are multiples of 0.1. The kind of an own hit is encoded by multiplying the
+-- value with a tiny per-kind factor (1 + code * step), which also survives the game adding up
+-- values. Decoding finds the factor that turns the value back into a multiple of 0.1; values that
+-- already are one have no code and are procs. The shown text is set from that rounded value, so
+-- the factor never shows. Exact for values up to about 0.1 / (MAX_CODE * CODE_STEP), i.e. 6500.
+local CODE_STEP = 1e-6
+local KIND_CODES = { hard = 1, soft = 2, element_hard = 3, element_soft = 4, fixed = 5 }
+local MAX_CODE = 5
+for _, kind in ipairs(KINDS) do
+    if ELEMENT_KINDS[kind] then
+        MAX_CODE = MAX_CODE + 1
+        KIND_CODES[kind] = MAX_CODE
+    end
 end
+local CODE_KINDS = {}
+for kind, code in pairs(KIND_CODES) do
+    CODE_KINDS[code] = kind
+end
+
+-- Menu
+local BOX_PADDING = 8
+local SLIDER_WIDTH = 220
+local HINT_COLOR = 0xFFA0A0A0
+-- imgui flags
+-- RowBg, BordersInnerH, BordersOuterH, SizingFixedFit, NoHostExtendX (as wide as its columns)
+local TABLE_FLAGS = (1 << 6) | (1 << 7) | (1 << 8) | (1 << 13) | (1 << 16)
+local COLOR_SWATCH_FLAGS = (1 << 5) | (1 << 7) -- NoInputs, NoLabel: a swatch that opens a picker
+
+-------------------------------------------------------------------------------
+-- Game types
+-------------------------------------------------------------------------------
+
+local ColorType = sdk.find_type_definition("via.Color")
+local GetHunterCharacter = sdk.find_type_definition("app.TargetAccessKeyUtil")
+    :get_method("getHunterCharacter(app.TARGET_ACCESS_KEY)")
+
+-------------------------------------------------------------------------------
+-- State
+-------------------------------------------------------------------------------
 
 local Config = {
     Enabled = true,
@@ -91,12 +158,49 @@ local Config = {
     GroupGap = DEFAULT_GROUP_GAP,
     GroupMaxTime = DEFAULT_GROUP_MAX_TIME,
     GroupEnabled = false,
+    ElementColors = false, -- element numbers colored by their element
 }
+local SaveDue = nil        -- os.clock() time the config is written at
+
+-- via.Color objects per kind, rebuilt whenever a color changes
+local Styles = {}
+-- The game's style of the number slots: slot -> { Text = style, Design = style }
+local Originals = {}
+-- Set when the game's style is to be put back on the next GUI update
+local RestorePending = false
+
+-- Own hits waiting for their number: value key -> FIFO list of { time, hit }
+local HitQueue = {}
+-- Element parts of split hits, waiting for their physical number
+local PendingElement = {}
+-- Element parts released by a physical number, requested on the next GUI update
+local ElementOutbox = {}
+-- Grouped numbers being collected: kind -> one request adding them all up; GroupOrder keeps the order
+local Groups, GroupOrder = {}, {}
+local FlushingGroups = false
+local LastCleanup = 0
+
+-- Debug log: the last DEBUG_MAX events, newest first, recorded while switched on in the menu
+local DebugEnabled = false
+local DebugLog = {}
+local DebugSeq = 0
+local DebugSlots = {} -- display slot -> last logged value
+local EnumNames = {}  -- enum type name -> value -> name
+
+-------------------------------------------------------------------------------
+-- Config and colors
+-------------------------------------------------------------------------------
+
+-- A dark tint of the text color, like the glows of the game's own number styles
+local function DeriveGlow(fill)
+    local r, g, b = fill & 0xFF, (fill >> 8) & 0xFF, (fill >> 16) & 0xFF
+    return 0xE6000000 | (math.floor(b * 0.2) << 16) | (math.floor(g * 0.2) << 8) | math.floor(r * 0.2)
+end
 
 local function LoadConfig()
     local saved = json.load_file(CONFIG_FILE)
     if type(saved) ~= "table" then saved = {} end
-    for _, key in ipairs({ "Enabled", "Decimal", "FontSize", "HardHitzone", "HardElementHitzone", "GroupGap", "GroupMaxTime", "GroupEnabled" }) do
+    for _, key in ipairs({ "Enabled", "Decimal", "FontSize", "HardHitzone", "HardElementHitzone", "GroupGap", "GroupMaxTime", "GroupEnabled", "ElementColors" }) do
         if type(saved[key]) == type(Config[key]) then
             Config[key] = saved[key]
         end
@@ -115,10 +219,6 @@ local function LoadConfig()
     end
 end
 
--- Dragging a slider or picker changes the config every frame; it is written once the changes stop
-local SAVE_DELAY = 0.5
-local SaveDue = nil
-
 local function RequestSave()
     SaveDue = os.clock() + SAVE_DELAY
 end
@@ -130,21 +230,11 @@ local function FlushSave()
     end
 end
 
-re.on_frame(function()
-    if SaveDue and os.clock() >= SaveDue then FlushSave() end
-end)
-re.on_script_reset(FlushSave)
-
-local ColorType = sdk.find_type_definition("via.Color")
-
 local function NewColor(rgba)
     local color = ValueType.new(ColorType)
     sdk.set_native_field(color, ColorType, "rgba", rgba)
     return color
 end
-
--- via.Color objects per kind, rebuilt whenever a color changes
-local Styles = {}
 
 local function BuildStyles()
     local textGlow, textShadow, designShadow = NewColor(TEXT_GLOW), NewColor(TEXT_SHADOW), NewColor(DESIGN_SHADOW)
@@ -161,24 +251,9 @@ local function BuildStyles()
     end
 end
 
-LoadConfig()
-BuildStyles()
-
 -------------------------------------------------------------------------------
 -- Kind codes
 -------------------------------------------------------------------------------
-
--- Game damage values are multiples of 0.1. The kind of an own hit is encoded by multiplying the
--- value with a tiny per-kind factor (1 + code * step), which also survives the game adding up
--- values. Decoding finds the factor that turns the value back into a multiple of 0.1; values that
--- already are one have no code and are procs. The shown text is set from that rounded value, so
--- the factor never shows. Exact for values up to about 9500.
-local CODE_STEP = 2e-6
-local KIND_CODES = { hard = 1, soft = 2, element_hard = 3, element_soft = 4, fixed = 5 }
-local CODE_KINDS = {}
-for kind, code in pairs(KIND_CODES) do
-    CODE_KINDS[code] = kind
-end
 
 local function BaseValue(value)
     return math.floor(value * 10 + 0.5) / 10
@@ -191,7 +266,7 @@ end
 -- Returns the kind and the value to show
 local function DecodeKind(value)
     local kind, shown, bestScore = "proc", BaseValue(value), nil
-    for code = 0, 5 do
+    for code = 0, MAX_CODE do
         local candidate = value / (1 + code * CODE_STEP)
         local base = BaseValue(candidate)
         -- a bit less than half the distance to the neighbouring code's value
@@ -215,28 +290,18 @@ local function PhysicalKind(hit)
 end
 
 local function ElementKind(hit)
+    local element = Config.ElementColors and ELEMENTS[hit.attr] or "element"
     -- Element that ignores hitzones (no element hitzone value) counts as soft
     if hit.meatElem < Config.HardElementHitzone and not (hit.ignoreMeat and hit.meatElem <= 0) then
-        return "element_hard"
+        return element .. "_hard"
     end
-    return "element_soft"
+    return element .. "_soft"
 end
 
 local function HitKind(hit)
     if hit.elemental > 0 and hit.physical <= 0 then return ElementKind(hit) end
     return PhysicalKind(hit)
 end
-
--- Own hits waiting for their number: value key -> FIFO list of { time, hit }
-local HitQueue = {}
--- Element parts of split hits, waiting for their physical number
-local PendingElement = {}
--- Element parts released by a physical number, requested on the next GUI update
-local ElementOutbox = {}
--- Grouped numbers being collected: kind -> one request adding them all up; GroupOrder keeps the order
-local Groups, GroupOrder = {}, {}
-local FlushingGroups = false
-local LastCleanup = 0
 
 local function Key(value)
     return string.format("%0.2f", value)
@@ -274,6 +339,20 @@ local function Cleanup()
     end
 end
 
+-- Drops everything still waiting, so nothing old shows up after enabling again
+local function ClearQueues()
+    HitQueue, PendingElement, ElementOutbox = {}, {}, {}
+    Groups, GroupOrder = {}, {}
+end
+
+local function IsGrouped(kind)
+    return Config.GroupEnabled and Config.Group[kind]
+end
+
+-------------------------------------------------------------------------------
+-- Helpers
+-------------------------------------------------------------------------------
+
 local function DerefPtr(ptr)
     local boxed = sdk.to_valuetype(ptr, "System.UInt64")
     return boxed and boxed:get_field("m_value")
@@ -287,10 +366,6 @@ local function ArgBool(arg)
     return (sdk.to_int64(arg) & 0xFF) ~= 0
 end
 
-local function IsGrouped(kind)
-    return Config.GroupEnabled and Config.Group[kind]
-end
-
 local function IsDefaultGUI(obj)
     return obj ~= nil and obj:get_type_definition():get_full_name() == "app.GUI020020"
 end
@@ -298,16 +373,6 @@ end
 local function LogError(where, err)
     log.info("[Split Damage Numbers] " .. where .. " failed: " .. tostring(err))
 end
-
--------------------------------------------------------------------------------
--- Debug log: the last DEBUG_MAX events, newest first, recorded while switched on in the menu
--------------------------------------------------------------------------------
-
-local DEBUG_MAX = 100
-local DebugEnabled = false
-local DebugLog = {}
-local DebugSeq = 0
-local DebugSlots = {} -- display slot -> last logged value
 
 local function DebugAdd(fmt, ...)
     DebugSeq = DebugSeq + 1
@@ -318,7 +383,6 @@ local function DebugAdd(fmt, ...)
 end
 
 -- Name of an enum value, e.g. ("app.GUI020020.State", 3) -> "HIGH(3)"
-local EnumNames = {}
 local function EnumName(typeName, value)
     local names = EnumNames[typeName]
     if not names then
@@ -335,11 +399,133 @@ local function EnumName(typeName, value)
 end
 
 -------------------------------------------------------------------------------
--- 1. Collect own hits
+-- Number styles
 -------------------------------------------------------------------------------
 
-local GetHunterCharacter = sdk.find_type_definition("app.TargetAccessKeyUtil")
-    :get_method("getHunterCharacter(app.TARGET_ACCESS_KEY)")
+local function ReadStyle(t)
+    local size = t:get_FontSize()
+    return {
+        Color = t:get_Color().rgba,
+        Glow = t:get_GlowColor().rgba,
+        Shadow = t:get_ShadowColor().rgba,
+        FontSlot = t:get_FontSlot(),
+        FontW = size.w,
+        FontH = size.h,
+        Language = t:get_Language(),
+    }
+end
+
+local function WriteStyle(t, s)
+    t:set_Color(NewColor(s.Color))
+    t:set_GlowColor(NewColor(s.Glow))
+    t:set_ShadowColor(NewColor(s.Shadow))
+    t:set_FontSlot(s.FontSlot)
+    local size = t:get_FontSize()
+    size.w = s.FontW
+    size.h = s.FontH
+    t:set_FontSize(size)
+    t:set_Language(s.Language)
+end
+
+local function SaveOriginal(slot, text, design)
+    local key = tostring(slot)
+    if Originals[key] then return end
+    Originals[key] = { Text = ReadStyle(text), Design = ReadStyle(design) }
+    json.dump_file(ORIGINALS_FILE, Originals)
+end
+
+-- Puts every number slot we styled back to the game's style
+local function RestoreOriginals(gui)
+    local slots = gui._DamageInfo
+    if not slots then return end
+    for i = 0, slots:get_size() - 1 do
+        local original = Originals[tostring(i)]
+        local info = original and slots:get_element(i)
+        if info then
+            WriteStyle(info:get_field("<TextDamage>k__BackingField"), original.Text)
+            WriteStyle(info:get_field("<DesignTextDamage>k__BackingField"), original.Design)
+        end
+    end
+end
+
+local function ApplyStyle(slot, style, text, design)
+    SaveOriginal(slot, text, design)
+    text:set_Color(style.fill)
+    text:set_GlowColor(style.textGlow)
+    text:set_ShadowColor(style.textShadow)
+    design:set_Color(style.fill)
+    design:set_GlowColor(style.glow)
+    design:set_ShadowColor(style.designShadow)
+
+    for _, t in ipairs({ text, design }) do
+        t:set_FontSlot(FONT_SLOT)
+        local size = t:get_FontSize()
+        size.w = Config.FontSize
+        size.h = Config.FontSize
+        t:set_FontSize(size)
+        t:set_Language(FONT_LANGUAGE)
+    end
+end
+
+-- The numbers on screen are the slots of the _DamageInfo array (_DamageInfoList only queues
+-- delayed numbers). DAMAGE_INFO is a struct, so these are copies, but their Text objects are the
+-- real ones. The game may overwrite the style (e.g. with the wound color), so it is re-applied
+-- whenever it differs.
+local function StyleNumbers(gui)
+    local slots = gui._DamageInfo
+    if not slots then return end
+    for i = 0, slots:get_size() - 1 do
+        local info = slots:get_element(i)
+        local value = info and info:get_field("<DamageValue>k__BackingField")
+        if value and value > 0 then
+            local kind, shown = DecodeKind(value)
+            local style = Styles[kind]
+            local text = info:get_field("<TextDamage>k__BackingField")
+            local design = info:get_field("<DesignTextDamage>k__BackingField")
+            if DebugEnabled and DebugSlots[i] ~= value then
+                DebugAdd("SHOW slot=%d value=%.4f shown=%.1f -> %s gameColor=%08X state=%s crit=%s", i, value,
+                    shown, kind, text:get_Color().rgba,
+                    EnumName("app.GUI020020.State", info:get_field("<State>k__BackingField")),
+                    EnumName("app.GUI020020.CRITICAL_STATE", info:get_field("<criticalState>k__BackingField")))
+            end
+            DebugSlots[i] = value
+            if text:get_Color().rgba ~= style.fillRgba or text:get_FontSize().w ~= Config.FontSize then
+                ApplyStyle(i, style, text, design)
+            end
+            local message = string.format(Config.Decimal and "%.1f" or "%.0f", shown)
+            if text:get_Message() ~= message then
+                text:call("set_Message(System.String)", message)
+                design:call("set_Message(System.String)", message)
+            end
+        end
+    end
+end
+
+-------------------------------------------------------------------------------
+-- Init
+-------------------------------------------------------------------------------
+
+LoadConfig()
+BuildStyles()
+
+do
+    local saved = json.load_file(ORIGINALS_FILE)
+    if type(saved) == "table" then Originals = saved end
+end
+-- Also when loaded disabled: the numbers may still carry the style of an earlier script run
+RestorePending = not Config.Enabled
+
+do
+    local guiSystem = sdk.get_native_singleton("via.gui.GUISystem")
+    if guiSystem then
+        sdk.call_native_func(guiSystem, sdk.find_type_definition("via.gui.GUISystem"), "loadFont(via.Language)",
+            FONT_LANGUAGE)
+    end
+end
+
+-------------------------------------------------------------------------------
+-- 1. Collect own hits
+-------------------------------------------------------------------------------
 
 local function StoreHit(calcDamage, damageRate, preCalc)
     local final = calcDamage.FinalDamage
@@ -363,6 +549,7 @@ local function StoreHit(calcDamage, damageRate, preCalc)
         elemental = calcDamage.Element,
         meat = math.ceil(damageRate.Meat * 100),
         meatElem = math.ceil(damageRate.MeatElem * 100),
+        attr = preCalc.AttackAttr,
         -- ActionType 0 ignores hitzones; a high stealth rate means a hitzone-independent sneak attack
         ignoreMeat = preCalc.ActionType == 0 or fixedOnly or damageRate.Hide > 1.1,
     }
@@ -380,9 +567,10 @@ local function StoreHit(calcDamage, damageRate, preCalc)
     HitQueue[key] = list
 
     if DebugEnabled then
-        DebugAdd("HIT key=%s phys=%.2f elem=%.2f meat=%d meatElem=%d ignoreMeat=%s actionType=%s"
+        DebugAdd("HIT key=%s phys=%.2f elem=%.2f meat=%d meatElem=%d element=%s ignoreMeat=%s actionType=%s"
             .. " attack=%.1f fix=%.1f abs=%.1f attr=%.1f hide=%.2f skillAdd=%.2f -> %s%s",
-            key, hit.physical, hit.elemental, hit.meat, hit.meatElem, tostring(hit.ignoreMeat),
+            key, hit.physical, hit.elemental, hit.meat, hit.meatElem,
+            EnumName("app.HitDef.ATTR", hit.attr), tostring(hit.ignoreMeat),
             tostring(preCalc.ActionType), preCalc.Attack, preCalc.FixAttack, preCalc.AbsoluteAttack,
             preCalc.AttrValue, damageRate.Hide, skillAdd, HitKind(hit),
             (hit.physical > 0 and hit.elemental > 0) and (" + " .. ElementKind(hit)) or "")
@@ -541,63 +729,19 @@ sdk.hook(sdk.find_type_definition("app.GUI020020"):get_method(REQUEST_DAMAGE_SIG
 -- 4. Request the element parts and grouped numbers, and style the numbers on screen
 -------------------------------------------------------------------------------
 
-local function ApplyStyle(style, text, design)
-    text:set_Color(style.fill)
-    text:set_GlowColor(style.textGlow)
-    text:set_ShadowColor(style.textShadow)
-    design:set_Color(style.fill)
-    design:set_GlowColor(style.glow)
-    design:set_ShadowColor(style.designShadow)
-
-    for _, t in ipairs({ text, design }) do
-        t:set_FontSlot(FONT_SLOT)
-        local size = t:get_FontSize()
-        size.w = Config.FontSize
-        size.h = Config.FontSize
-        t:set_FontSize(size)
-        t:set_Language(FONT_LANGUAGE)
-    end
-end
-
--- The numbers on screen are the slots of the _DamageInfo array (_DamageInfoList only queues
--- delayed numbers). DAMAGE_INFO is a struct, so these are copies, but their Text objects are the
--- real ones. The game may overwrite the style (e.g. with the wound color), so it is re-applied
--- whenever it differs.
-local function StyleNumbers(gui)
-    local slots = gui._DamageInfo
-    if not slots then return end
-    for i = 0, slots:get_size() - 1 do
-        local info = slots:get_element(i)
-        local value = info and info:get_field("<DamageValue>k__BackingField")
-        if value and value > 0 then
-            local kind, shown = DecodeKind(value)
-            local style = Styles[kind]
-            local text = info:get_field("<TextDamage>k__BackingField")
-            local design = info:get_field("<DesignTextDamage>k__BackingField")
-            if DebugEnabled and DebugSlots[i] ~= value then
-                DebugAdd("SHOW slot=%d value=%.4f shown=%.1f -> %s gameColor=%08X state=%s crit=%s", i, value,
-                    shown, kind, text:get_Color().rgba,
-                    EnumName("app.GUI020020.State", info:get_field("<State>k__BackingField")),
-                    EnumName("app.GUI020020.CRITICAL_STATE", info:get_field("<criticalState>k__BackingField")))
-            end
-            DebugSlots[i] = value
-            if text:get_Color().rgba ~= style.fillRgba or text:get_FontSize().w ~= Config.FontSize then
-                ApplyStyle(style, text, design)
-            end
-            local message = string.format(Config.Decimal and "%.1f" or "%.0f", shown)
-            if text:get_Message() ~= message then
-                text:call("set_Message(System.String)", message)
-                design:call("set_Message(System.String)", message)
-            end
-        end
-    end
-end
-
 sdk.hook(sdk.find_type_definition("app.GUI020020"):get_method("guiLateUpdate()"),
     function(args)
-        if not Config.Enabled then return end
         local gui = sdk.to_managed_object(args[2])
         if not IsDefaultGUI(gui) then return end
+        if not Config.Enabled then
+            -- Restored here on the game thread instead of from the menu
+            if RestorePending then
+                RestorePending = false
+                local ok, err = pcall(RestoreOriginals, gui)
+                if not ok then LogError("restoring style", err) end
+            end
+            return
+        end
         thread.get_hook_storage().gui = gui
 
         -- These go through the requestDamage hook, so grouped element parts land in Groups
@@ -645,26 +789,9 @@ sdk.hook(sdk.find_type_definition("app.GUI020020"):get_method("guiLateUpdate()")
         return retval
     end)
 
-do
-    local guiSystem = sdk.get_native_singleton("via.gui.GUISystem")
-    if guiSystem then
-        sdk.call_native_func(guiSystem, sdk.find_type_definition("via.gui.GUISystem"), "loadFont(via.Language)",
-            FONT_LANGUAGE)
-    end
-end
-
 -------------------------------------------------------------------------------
 -- Menu
 -------------------------------------------------------------------------------
-
-local BOX_PADDING = 8
-local SLIDER_WIDTH = 220
-local HINT_COLOR = 0xFFA0A0A0
-
--- imgui flags
--- RowBg, BordersInnerH, BordersOuterH, SizingFixedFit, NoHostExtendX (as wide as its columns)
-local TABLE_FLAGS = (1 << 6) | (1 << 7) | (1 << 8) | (1 << 13) | (1 << 16)
-local COLOR_SWATCH_FLAGS = (1 << 5) | (1 << 7) -- NoInputs, NoLabel: a swatch that opens a picker
 
 -- A border around a block of the menu, with some room between border and content
 local function BeginBox()
@@ -722,6 +849,7 @@ local function ResetAll()
     Config.GroupEnabled = false
     Config.GroupGap = DEFAULT_GROUP_GAP
     Config.GroupMaxTime = DEFAULT_GROUP_MAX_TIME
+    Config.ElementColors = false
     for _, kind in ipairs(KINDS) do
         Config.Show[kind] = true
         Config.Group[kind] = false
@@ -757,6 +885,12 @@ local function DrawGrouping()
     c, Config.GroupEnabled = imgui.checkbox("Enabled##group_enabled", Config.GroupEnabled)
     Tooltip("pick the grouped types in the Group column below")
     changed = changed or c
+    -- Turning grouping on groups every type
+    if c and Config.GroupEnabled then
+        for _, kind in ipairs(KINDS) do
+            Config.Group[kind] = true
+        end
+    end
     if Config.GroupEnabled then
         c, Config.GroupGap = SliderFloat("Gap##group_gap", Config.GroupGap, 0.05, 1.0, "%.2f s",
             "a group is shown once no new number joined it for this long")
@@ -771,8 +905,11 @@ end
 -- One row per number type: show, group, text and glow color
 local function DrawNumberTypes()
     Heading("Number types", "hover a type for what it covers, click a color to change it")
-    if not imgui.begin_table("number_types", 5, TABLE_FLAGS) then return false end
     local changed, c = false, false
+    c, Config.ElementColors = imgui.checkbox("Separate element colors", Config.ElementColors)
+    Tooltip("own colors for fire, water, thunder, ice and dragon instead of Element hard/soft")
+    changed = changed or c
+    if not imgui.begin_table("number_types", 5, TABLE_FLAGS) then return changed end
     imgui.table_setup_column("Type")
     imgui.table_setup_column("Show")
     imgui.table_setup_column("Group")
@@ -781,6 +918,11 @@ local function DrawNumberTypes()
     imgui.table_headers_row()
 
     for _, kind in ipairs(KINDS) do
+        -- Either the per element rows or the shared element rows
+        local shared = kind == "element_hard" or kind == "element_soft"
+        if (ELEMENT_KINDS[kind] and not Config.ElementColors) or (shared and Config.ElementColors) then
+            goto continue
+        end
         local colors = Config.Colors[kind]
         imgui.table_next_row()
 
@@ -818,6 +960,7 @@ local function DrawNumberTypes()
             colors.Glow = glow
             changed = true
         end
+        ::continue::
     end
     imgui.end_table()
     return changed
@@ -847,6 +990,15 @@ local function DrawDebug()
     imgui.tree_pop()
 end
 
+-------------------------------------------------------------------------------
+-- Callbacks
+-------------------------------------------------------------------------------
+
+re.on_frame(function()
+    if SaveDue and os.clock() >= SaveDue then FlushSave() end
+end)
+re.on_script_reset(FlushSave)
+
 re.on_draw_ui(function()
     if not imgui.tree_node("Split Damage Numbers") then return end
     BeginBox()
@@ -854,6 +1006,10 @@ re.on_draw_ui(function()
 
     c, Config.Enabled = imgui.checkbox("Enabled", Config.Enabled)
     changed = changed or c
+    if c then
+        ClearQueues()
+        RestorePending = not Config.Enabled
+    end
 
     if Config.Enabled then
         changed = DrawGeneral() or changed

@@ -1,5 +1,20 @@
 # Split Damage Numbers - Monster Hunter Wilds Mod
 
+<table>
+  <tr>
+    <td valign="top" width="50%">
+      <img src="./assets/ref_ui1.png" alt="UI 1" width="100%">
+    </td>
+    <td valign="top" width="50%">
+      <img src="./assets/ref_ui2.png" alt="UI 2" width="100%">
+    </td>
+  </tr>
+</table>
+
+## Requirements
+
+- Requires [REFramework](https://www.nexusmods.com/monsterhunterwilds/mods/93)
+
 ## Features
 
 - Colors damage numbers by what caused them:
@@ -12,10 +27,6 @@
 - Configurable text and glow color, visibility and grouping per number type
 - Configurable font size and optional decimal places
 
-## Requirements
-
-- Requires [REFramework](https://www.nexusmods.com/monsterhunterwilds/mods/93)
-
 ## Installation
 
 - Download from GitHub Releases and ensure `split_damage_numbers.lua` is placed under `reframework/autorun`
@@ -24,3 +35,18 @@
 
 - After installation, open the REFramework menu and configure the mod under `Split Damage Numbers`
 - Settings are saved automatically to `reframework/data/split_damage_numbers.json`
+
+## Default Colors
+
+- **Physical**: Default game color
+- **Element**: Red
+- **Fixed**: Purple
+- **Proc**: Blue
+
+![charge-blade](./assets/charge-blade.gif)
+
+![gunlance](./assets/gunlance.gif)
+
+![horn](./assets/horn.gif)
+
+![bow-grouping](./assets/bow-grouping.gif)
