@@ -8,7 +8,7 @@ This repository contains various mods for the game Monster Hunter Wilds and buil
 
 - [Better Hunter Highlights 1.6.5](https://github.com/thieleju/mhws-mods/releases/tag/better-hunter-highlights-v1.6.5)
 - [Skill Uptime Tracker 1.6.0](https://github.com/thieleju/mhws-mods/releases/tag/skill-uptime-tracker-v1.6.0)
-- [Split Damage Numbers 1.0.0](https://github.com/thieleju/mhws-mods/releases/tag/split-damage-numbers-v1.0.0)
+- [Split Damage Numbers 1.1.0](https://github.com/thieleju/mhws-mods/releases/tag/split-damage-numbers-v1.1.0)
 
 ## Contributing
 
