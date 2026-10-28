@@ -1,3 +1,10 @@
+# [split-damage-numbers-v1.1.1](https://github.com/thieleju/mhws-mods/compare/split-damage-numbers-v1.1.0...split-damage-numbers-v1.1.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **split-damage-numbers:** performance optimization and enhanced debug logging ([409ba04](https://github.com/thieleju/mhws-mods/commit/409ba0445205cd8116b2f6cd5e008931e1784ef8))
+
 # [split-damage-numbers-v1.1.0](https://github.com/thieleju/mhws-mods/compare/split-damage-numbers-v1.0.0...split-damage-numbers-v1.1.0) (2026-10-25)
 
 
