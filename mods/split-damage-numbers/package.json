@@ -1,6 +1,6 @@
 {
   "name": "split-damage-numbers",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "scripts": {
     "build": "MOD_NAME=split-damage-numbers node ../../build.js"
   },
