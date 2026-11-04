@@ -3,6 +3,8 @@
 // versions in mods/<mod>/modinfo.ini and the known tag format "<folder>-v<version>".
 // - Link text: modinfo.ini name
 // - Link URL: https://github.com/<owner>/<repo>/releases/tag/<folder>-v<version>
+// Only mods whose release tag exists are listed. The mod currently being
+// released (env MOD_NAME) is always included, since its tag is created later.
 
 const fs = require("fs");
 const path = require("path");
@@ -17,6 +19,15 @@ function findGitRoot() {
   } catch (e) {
     // Fallback to current directory if not in a git repo
     return process.cwd();
+  }
+}
+
+function getTags(repoRoot) {
+  try {
+    const out = execSync("git tag --list", { cwd: repoRoot, encoding: "utf8" });
+    return new Set(out.split(/\r?\n/).filter(Boolean));
+  } catch (e) {
+    return new Set();
   }
 }
 
@@ -35,7 +46,7 @@ function parseIni(content) {
   return result;
 }
 
-function getModsInfo(modsDir) {
+function getModsInfo(modsDir, tags, releasingMod) {
   if (!fs.existsSync(modsDir)) return [];
   const entries = fs.readdirSync(modsDir, { withFileTypes: true });
   const mods = [];
@@ -49,6 +60,8 @@ function getModsInfo(modsDir) {
       const name = ini.name || folder;
       const version = ini.version;
       if (!version) continue; // skip if no version
+      // skip unreleased mods to avoid dead links
+      if (folder !== releasingMod && !tags.has(`${folder}-v${version}`)) continue;
       mods.push({ folder, name, version });
     } catch (e) {
       // skip broken ini
@@ -91,7 +104,7 @@ function main() {
   const readmePath = path.join(repoRoot, "README.md");
   const repo = process.env.GITHUB_REPOSITORY || "thieleju/mhws-mods";
 
-  const mods = getModsInfo(modsDir);
+  const mods = getModsInfo(modsDir, getTags(repoRoot), process.env.MOD_NAME);
   const newSection = buildSection(mods, repo);
 
   const oldReadme = fs.existsSync(readmePath)

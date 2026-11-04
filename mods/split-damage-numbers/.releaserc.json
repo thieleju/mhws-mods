@@ -14,7 +14,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "MOD_NAME=split-damage-numbers VERSION=${nextRelease.version} node ../../build.js && node ../../update-readme.js && git add ../../README.md"
+        "prepareCmd": "MOD_NAME=split-damage-numbers VERSION=${nextRelease.version} node ../../build.js && MOD_NAME=split-damage-numbers node ../../update-readme.js && git add ../../README.md"
       }
     ],
     [

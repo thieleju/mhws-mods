@@ -14,7 +14,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "MOD_NAME=better-hunter-highlights VERSION=${nextRelease.version} node ../../build.js && node ../../update-readme.js && git add ../../README.md"
+        "prepareCmd": "MOD_NAME=better-hunter-highlights VERSION=${nextRelease.version} node ../../build.js && MOD_NAME=better-hunter-highlights node ../../update-readme.js && git add ../../README.md"
       }
     ],
     [

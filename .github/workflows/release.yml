@@ -22,10 +22,14 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: pnpm
 
       - name: Select mod
         id: select_mod
@@ -38,8 +42,8 @@ jobs:
             exit 1
           fi
 
-      - name: Install dependencies (root workspaces)
-        run: npm ci --workspaces --include-workspace-root
+      - name: Install dependencies (workspace)
+        run: pnpm install --frozen-lockfile
 
       - name: Check if release is needed (dry-run)
         id: check_release
@@ -47,7 +51,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd $MOD_PATH
-          OUTPUT=$(npx semantic-release --dry-run 2>&1)
+          OUTPUT=$(pnpm exec semantic-release --dry-run 2>&1)
           echo "$OUTPUT"
           if echo "$OUTPUT" | grep -qE "The next release version is|Published release"; then
             echo "needs_release=true" >> $GITHUB_OUTPUT
@@ -63,7 +67,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd $MOD_PATH
-          npx semantic-release
+          pnpm exec semantic-release
 
       - name: Push changes
         if: steps.check_release.outputs.needs_release == 'true'
