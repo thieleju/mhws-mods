@@ -541,8 +541,12 @@ re.on_application_entry("UpdateGUI",function()
     end
 end)
 
+local BOX_PADDING=10
 re.on_draw_ui(function()
-    if stopped or not imgui.tree_node("DisplayMoveDamage") then return end
+    if stopped or not imgui.tree_node("Display Move Damage") then return end
+    imgui.begin_rect()
+    imgui.spacing()
+    imgui.indent(BOX_PADDING)
     local function control(label,key,format)
         local spec=schema[key]
         local changed,value
@@ -575,6 +579,9 @@ re.on_draw_ui(function()
     end
     imgui.text("Status: "..Panel.status)
     if Panel.error then imgui.text("Error: "..Panel.error:match("[^\r\n]*"):sub(1,240)) end
+    imgui.unindent(BOX_PADDING)
+    imgui.spacing()
+    imgui.end_rect(BOX_PADDING/2)
     imgui.tree_pop()
 end)
 

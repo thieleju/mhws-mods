@@ -22,7 +22,7 @@ Shows how much damage your moves deal while you hunt. The top row shows the curr
 
 ## Usage
 
-- Open the REFramework menu and configure the mod under `DisplayMoveDamage`
+- Open the REFramework menu and configure the mod under `Display Move Damage`
 - Options: enable, large monsters only, hit count, training area, merge window, auto-hide, position and scale
 - Use `Preview` to position the panel without fighting
 - Settings are saved automatically to `reframework/data/DisplayMoveDamage/config.json`
