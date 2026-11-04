@@ -1,0 +1,7 @@
+{
+  "name": "monster-hunt-counter-fork",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "MOD_NAME=monster-hunt-counter-fork node ../../build.js"
+  }
+}
