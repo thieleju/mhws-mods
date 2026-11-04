@@ -192,6 +192,8 @@ importers:
 
   mods/display-move-damage: {}
 
+  mods/draw-weapon-everywhere: {}
+
   mods/monster-hunt-counter-fork: {}
 
   mods/skill-uptime-tracker: {}

@@ -1,0 +1,7 @@
+{
+  "name": "draw-weapon-everywhere",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "MOD_NAME=draw-weapon-everywhere node ../../build.js"
+  }
+}
