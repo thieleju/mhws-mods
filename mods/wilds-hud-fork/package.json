@@ -1,0 +1,7 @@
+{
+  "name": "wilds-hud-fork",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "MOD_NAME=wilds-hud-fork node ../../build.js"
+  }
+}
