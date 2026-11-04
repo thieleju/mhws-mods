@@ -1,0 +1,7 @@
+{
+  "name": "display-move-damage",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "MOD_NAME=display-move-damage node ../../build.js"
+  }
+}

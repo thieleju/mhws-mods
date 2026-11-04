@@ -21,7 +21,7 @@ Examples:
 - `fix(<module>): fix a bug`
 - `chore(<module>): general maintenance or code cleanup`
 
-Replace `<module>` with the mod name you're working on (e.g., `better-hunter-highlights`, `monster-hunt-counter-fork`, `skill-uptime-tracker`, `split-damage-numbers`, `wilds-hud-fork`).
+Replace `<module>` with the mod name you're working on (e.g., `better-hunter-highlights`, `display-move-damage`, `monster-hunt-counter-fork`, `skill-uptime-tracker`, `split-damage-numbers`, `wilds-hud-fork`).
 
 ## Contributors
 
